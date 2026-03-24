@@ -11,24 +11,45 @@ export interface Achievement {
   subtitle: string;
 }
 
-export const ACHIEVEMENTS: Achievement[] = [
-  { id: "day_1",   days: 1,   emoji: "🌅", title: "Primera noche",      subtitle: "El primer día siempre es el más difícil." },
-  { id: "day_3",   days: 3,   emoji: "🔥", title: "72 horas",           subtitle: "La tormenta más dura ya pasó." },
-  { id: "day_7",   days: 7,   emoji: "⚡", title: "Una semana limpio",  subtitle: "Tu cerebro ya empieza a sanar." },
-  { id: "day_14",  days: 14,  emoji: "💎", title: "Dos semanas",        subtitle: "El hábito se está rompiendo de verdad." },
-  { id: "day_30",  days: 30,  emoji: "🏆", title: "Un mes completo",    subtitle: "30 días que cambian todo." },
-  { id: "day_60",  days: 60,  emoji: "🦅", title: "El punto de quiebre", subtitle: "Ya eres otra persona." },
-  { id: "day_90",  days: 90,  emoji: "👑", title: "90 días",            subtitle: "La ciencia dice que ya es un hábito. Tú lo lograste." },
-  { id: "day_180", days: 180, emoji: "🌍", title: "Medio año",          subtitle: "Seis meses de pura voluntad." },
-  { id: "day_365", days: 365, emoji: "🌟", title: "Un año entero",      subtitle: "Un año completo. Eres imparable." },
+// Logros para hábitos de dejar (sobriety / quit)
+export const ACHIEVEMENTS_SOBRIETY: Achievement[] = [
+  { id: "day_1",   days: 1,   emoji: "🌅", title: "Primera noche",        subtitle: "El primer día siempre es el más difícil." },
+  { id: "day_3",   days: 3,   emoji: "🔥", title: "72 horas",             subtitle: "La tormenta más dura ya pasó." },
+  { id: "day_7",   days: 7,   emoji: "⚡", title: "Una semana limpio",    subtitle: "Tu cerebro ya empieza a sanar." },
+  { id: "day_14",  days: 14,  emoji: "💎", title: "Dos semanas",          subtitle: "El hábito se está rompiendo de verdad." },
+  { id: "day_30",  days: 30,  emoji: "🏆", title: "Un mes completo",      subtitle: "30 días que cambian todo." },
+  { id: "day_60",  days: 60,  emoji: "🦅", title: "El punto de quiebre",  subtitle: "Ya eres otra persona." },
+  { id: "day_90",  days: 90,  emoji: "👑", title: "90 días",              subtitle: "La ciencia dice que ya es un hábito. Tú lo lograste." },
+  { id: "day_180", days: 180, emoji: "🌍", title: "Medio año",            subtitle: "Seis meses de pura voluntad." },
+  { id: "day_365", days: 365, emoji: "🌟", title: "Un año entero",        subtitle: "Un año completo. Eres imparable." },
 ];
 
-export function getUnlockedAchievements(streak: number): Achievement[] {
-  return ACHIEVEMENTS.filter((a) => streak >= a.days);
+// Logros para hábitos de construir (build / acquire)
+export const ACHIEVEMENTS_BUILD: Achievement[] = [
+  { id: "day_1",   days: 1,   emoji: "🌱", title: "Primer día",           subtitle: "Todo gran hábito empieza con una sola vez." },
+  { id: "day_3",   days: 3,   emoji: "🔥", title: "3 días seguidos",      subtitle: "La constancia empieza aquí." },
+  { id: "day_7",   days: 7,   emoji: "⚡", title: "Una semana de práctica", subtitle: "Tu cerebro ya empieza a adaptarse." },
+  { id: "day_14",  days: 14,  emoji: "💎", title: "Dos semanas",          subtitle: "El patrón está tomando forma." },
+  { id: "day_30",  days: 30,  emoji: "🏆", title: "Un mes construyendo",  subtitle: "30 días de práctica sostenida." },
+  { id: "day_60",  days: 60,  emoji: "🦅", title: "Dos meses",            subtitle: "Ya es parte de tu identidad." },
+  { id: "day_90",  days: 90,  emoji: "👑", title: "90 días",              subtitle: "La ciencia dice que ya es un hábito. Lo construiste." },
+  { id: "day_180", days: 180, emoji: "🌍", title: "Medio año",            subtitle: "Seis meses de dedicación sostenida." },
+  { id: "day_365", days: 365, emoji: "🌟", title: "Un año entero",        subtitle: "Un año de crecimiento. Eres imparable." },
+];
+
+// Por defecto usa sobriety para retrocompatibilidad
+export const ACHIEVEMENTS = ACHIEVEMENTS_SOBRIETY;
+
+export function getAchievementsForType(type?: string): Achievement[] {
+  return type === "build" ? ACHIEVEMENTS_BUILD : ACHIEVEMENTS_SOBRIETY;
 }
 
-export function getNextAchievement(streak: number): Achievement | null {
-  return ACHIEVEMENTS.find((a) => a.days > streak) ?? null;
+export function getUnlockedAchievements(streak: number, type?: string): Achievement[] {
+  return getAchievementsForType(type).filter((a) => streak >= a.days);
+}
+
+export function getNextAchievement(streak: number, type?: string): Achievement | null {
+  return getAchievementsForType(type).find((a) => a.days > streak) ?? null;
 }
 
 interface Props {

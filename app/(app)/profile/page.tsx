@@ -6,7 +6,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useRouter } from "next/navigation";
 import { useAppStore } from "@/lib/store";
 import { logoutUser } from "@/lib/auth";
-import { updateHabit, deleteHabit } from "@/lib/firestore";
+import { updateHabit, deleteHabit, updateUserDoc } from "@/lib/firestore";
 import { useNotifications } from "@/hooks/useNotifications";
 import {
   Settings, Bell, BellOff, Lock, LogOut,
@@ -30,6 +30,8 @@ export default function ProfilePage() {
   const [habitToDelete, setHabitToDelete] = useState<{ id: string; name: string; streak: number } | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [notifToast, setNotifToast] = useState<string | null>(null);
+  const [showReminderPicker, setShowReminderPicker] = useState(false);
+  const [reminderHour, setReminderHour] = useState<number | null>(null);
 
   const { status: notifStatus, loading: notifLoading, enable: enableNotifs, disable: disableNotifs } =
     useNotifications(user?.uid ?? null);
@@ -55,6 +57,17 @@ export default function ProfilePage() {
     await logoutUser();
     clearSession();
     router.push("/login");
+  };
+
+  const saveReminderHour = async (hour: number) => {
+    setReminderHour(hour);
+    setShowReminderPicker(false);
+    if (user) {
+      await updateUserDoc(user.uid, {
+        settings: { notificationsEnabled: true, theme: "dark", reminderHour: hour } as never,
+      }).catch(() => {});
+      setNotifToast(`Recordatorio personalizado a las ${hour}:00`);
+    }
   };
 
   const toggleNotifications = async () => {
@@ -251,6 +264,62 @@ export default function ProfilePage() {
               )}
             </button>
           </div>
+
+          {/* Custom reminder */}
+          {notificationsEnabled && (
+            <div className="border-t border-white/5">
+              <button
+                onClick={() => setShowReminderPicker(!showReminderPicker)}
+                className="w-full flex items-center justify-between p-5 hover:bg-white/2 transition-colors"
+              >
+                <div className="flex items-center gap-3">
+                  <Bell size={18} className="text-[#908fa3]" strokeWidth={1.8} />
+                  <div>
+                    <span className="font-[Manrope] text-sm font-medium text-[#e4e1e7]">Hora del recordatorio</span>
+                    <p className="text-[10px] text-[#908fa3]">
+                      {reminderHour !== null ? `${reminderHour}:00 cada día` : "Por defecto: 8 AM y 9 PM"}
+                    </p>
+                  </div>
+                </div>
+                <ChevronRight size={16} className={`text-[#908fa3] transition-transform ${showReminderPicker ? "rotate-90" : ""}`} />
+              </button>
+              <AnimatePresence>
+                {showReminderPicker && (
+                  <motion.div
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: "auto", opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    className="overflow-hidden px-4 pb-4"
+                  >
+                    <p className="text-[10px] text-[#908fa3] mb-3 font-bold uppercase tracking-widest">Elige una hora</p>
+                    <div className="grid grid-cols-4 gap-2">
+                      {[6, 7, 8, 9, 10, 12, 17, 18, 19, 20, 21, 22].map((h) => (
+                        <button
+                          key={h}
+                          onClick={() => saveReminderHour(h)}
+                          className={`py-2 rounded-xl text-sm font-bold transition-all ${
+                            reminderHour === h
+                              ? "bg-[#3832f6] text-white"
+                              : "bg-[#2a292e] text-[#908fa3] hover:text-white"
+                          }`}
+                        >
+                          {h}:00
+                        </button>
+                      ))}
+                    </div>
+                    {reminderHour !== null && (
+                      <button
+                        onClick={() => { setReminderHour(null); setShowReminderPicker(false); }}
+                        className="mt-3 text-[10px] text-[#454557] w-full text-center"
+                      >
+                        Usar horarios por defecto (8 AM y 9 PM)
+                      </button>
+                    )}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+          )}
 
           {/* Privacy */}
           <button

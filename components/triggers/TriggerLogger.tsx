@@ -88,7 +88,7 @@ export default function TriggerLogger({ onLogged }: TriggerLoggerProps) {
                 <motion.button
                   key={opt.type}
                   whileTap={{ scale: 0.94 }}
-                  onClick={() => setSelected(opt.type)}
+                  onClick={() => setSelected(selected === opt.type ? null : opt.type)}
                   className={`flex flex-col items-center justify-center p-5 rounded-2xl border transition-all duration-200 ${
                     selected === opt.type
                       ? "border-[#3832f6] bg-[#3832f6]/10 text-[#c1c1ff]"

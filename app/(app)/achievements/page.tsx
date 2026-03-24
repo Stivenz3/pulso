@@ -3,7 +3,7 @@
 import { useRef } from "react";
 import { motion } from "framer-motion";
 import { useAppStore } from "@/lib/store";
-import { ACHIEVEMENTS } from "@/components/home/AchievementToast";
+import { getAchievementsForType } from "@/components/home/AchievementToast";
 import Image from "next/image";
 
 const pageVariants = {
@@ -11,8 +11,7 @@ const pageVariants = {
   animate: { opacity: 1, y: 0 },
 };
 
-// Mensaje de motivación al desbloquear cada logro
-const unlockMessages: Record<string, string> = {
+const unlockMessagesSobriety: Record<string, string> = {
   day_1:   "Completar el primer día es más difícil que cualquier otro. Tu cerebro ya está cambiando a nivel neurológico.",
   day_3:   "72 horas. Los primeros síntomas de abstinencia pasan. Tu cuerpo ya está limpiando lo que no necesita.",
   day_7:   "Una semana entera. Tu cerebro comenzó a restaurar los receptores de dopamina. Sientes las cosas más nítidas.",
@@ -23,9 +22,7 @@ const unlockMessages: Record<string, string> = {
   day_180: "Medio año de pura voluntad. Has pasado por días buenos y malos, y aquí estás. Eso es lo que te define.",
   day_365: "Un año completo. 365 decisiones correctas. Cada mañana elegiste, y cada noche ganaste. Eres imparable.",
 };
-
-// Mensaje de motivación para logros aún bloqueados
-const lockedMessages: Record<string, string> = {
+const lockedMessagesSobriety: Record<string, string> = {
   day_1:   "El camino empieza con un solo día. Solo tienes que llegar a esta noche.",
   day_3:   "Las primeras 72 horas son las más intensas. Después viene la claridad.",
   day_7:   "Una semana cambia cómo te sientes. Aguanta hasta el próximo lunes.",
@@ -36,13 +33,40 @@ const lockedMessages: Record<string, string> = {
   day_180: "Medio año. Imagina cómo te sentirás en ese punto. Sigue.",
   day_365: "Un año entero. Una versión de ti que jamás imaginaste. Está esperando.",
 };
+const unlockMessagesBuild: Record<string, string> = {
+  day_1:   "Lo hiciste. El primer día siempre es una decisión, y tú la tomaste.",
+  day_3:   "3 días seguidos. Tu cerebro ya empieza a asociar este comportamiento como parte de ti.",
+  day_7:   "Una semana de práctica. Los estudios muestran que 7 días consecutivos crean una señal neural sólida.",
+  day_14:  "Dos semanas construyendo. La resistencia inicial ya pasó. Ahora lo haces porque quieres.",
+  day_30:  "Un mes completo. Tu cerebro liberó suficiente dopamina para hacer esto satisfactorio. Ya está grabado.",
+  day_60:  "Dos meses. Pregúntate cómo te sentirías si no lo hicieras. Esa incomodidad es la prueba de que ya eres esto.",
+  day_90:  "90 días. El umbral donde la ciencia dice que el hábito ya está instalado. Felicitaciones.",
+  day_180: "Medio año de práctica deliberada. Has acumulado una destreza que la mayoría no tiene. Úsala.",
+  day_365: "Un año entero. 365 repeticiones. Esto ya no es un hábito, es una habilidad. Eres imparable.",
+};
+const lockedMessagesBuild: Record<string, string> = {
+  day_1:   "Empieza hoy. Una sola vez. Solo eso.",
+  day_3:   "3 días seguidos y tu cerebro empieza a notar el patrón.",
+  day_7:   "Una semana de práctica lo hace notablemente más fácil.",
+  day_14:  "Dos semanas y la rutina ya no requiere tanta fuerza de voluntad.",
+  day_30:  "Un mes lo hace automático. Cada día que practicas, menos esfuerzo cuesta.",
+  day_60:  "A los 60 días ya es parte de quién eres, no solo de lo que haces.",
+  day_90:  "90 días es el estándar científico para instalar un hábito. Puedes llegar.",
+  day_180: "Medio año de práctica sostenida. Imagina la versión de ti que llegó aquí.",
+  day_365: "Un año entero construyendo. Una identidad nueva. Está al otro lado.",
+};
 
 export default function AchievementsPage() {
   const { habits, activeHabitId } = useAppStore();
   const activeHabit = habits.find((h) => h.id === activeHabitId) || habits[0];
   const currentStreak = activeHabit?.currentStreak ?? 0;
+  const habitType = activeHabit?.type;
+  const isBuild = habitType === "build";
+  const unlockMessages = isBuild ? unlockMessagesBuild : unlockMessagesSobriety;
+  const lockedMessages = isBuild ? lockedMessagesBuild : lockedMessagesSobriety;
   const scrollRef = useRef<HTMLDivElement>(null);
 
+  const ACHIEVEMENTS = getAchievementsForType(habitType);
   const unlocked = ACHIEVEMENTS.filter((a) => currentStreak >= a.days);
   const locked = ACHIEVEMENTS.filter((a) => currentStreak < a.days);
   const nextAchievement = locked[0] ?? null;

@@ -64,6 +64,10 @@ export async function GET(req: NextRequest) {
       const name: string = userData.name || "amigo";
       const uid = userDoc.id;
 
+      // Hora personalizada del usuario — si está configurada y no coincide, saltar
+      const customHour: number | undefined = userData.settings?.reminderHour;
+      if (customHour !== undefined && customHour !== colombiaHour) continue;
+
       const habit = await getActiveHabit(db, uid);
       const streak: number = habit?.currentStreak ?? 0;
       const habitName: string = habit?.name ?? "tu hábito";
