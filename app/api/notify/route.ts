@@ -2,14 +2,13 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import admin from "@/lib/firebase-admin";
 
-// Crons configurados en vercel.json:
-//   /api/notify?type=morning  → 0 8  * * *  (8 AM UTC)
-//   /api/notify?type=evening  → 0 21 * * *  (9 PM UTC)
-//   /api/notify?type=inactive → 0 12 * * *  (12 PM UTC — verifica inactividad)
+// Este endpoint se llama desde 2 crons (ver vercel.json):
+//   0 13 * * *  → 8 AM Colombia  → saludo matutino
+//   0  2 * * *  → 9 PM Colombia  → saludo nocturno
+// El endpoint detecta la hora Colombia automáticamente (UTC-5).
+// Además, si el usuario lleva +48h sin abrir la app, recibe recordatorio de inactividad.
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
-
-type CronType = "morning" | "evening" | "inactive";
 
 async function getActiveHabit(db: admin.firestore.Firestore, uid: string) {
   const snap = await db
@@ -19,15 +18,6 @@ async function getActiveHabit(db: admin.firestore.Firestore, uid: string) {
     .limit(1)
     .get();
   return snap.empty ? null : snap.docs[0].data();
-}
-
-function streakMessage(streak: number, name: string, habitName: string): string {
-  if (streak === 0) return `Hoy puede ser el día 1 con ${habitName}. Tú puedes.`;
-  if (streak === 1) return `Día 1 logrado, ${name}. Que duermas limpio esta noche.`;
-  if (streak < 7) return `${streak} días con ${habitName}. La racha es real.`;
-  if (streak < 30) return `${streak} días limpio. Estás construyendo algo poderoso.`;
-  if (streak < 90) return `${streak} días. Eres más fuerte que lo que te detuvo antes.`;
-  return `${streak} días. Eres un ejemplo. Sigue.`;
 }
 
 export async function GET(req: NextRequest) {
@@ -45,10 +35,16 @@ export async function GET(req: NextRequest) {
     );
   }
 
-  const cronType = (req.nextUrl.searchParams.get("type") ?? "evening") as CronType;
-
   try {
     const db = admin.firestore();
+
+    // Hora local Colombia (UTC-5)
+    const nowUtc = new Date();
+    const colombiaHour = ((nowUtc.getUTCHours() - 5) + 24) % 24;
+    const isMorning = colombiaHour >= 6 && colombiaHour < 12;
+
+    const twoDaysAgo = new Date(nowUtc.getTime() - 48 * 60 * 60 * 1000);
+
     const usersSnap = await db
       .collection("users")
       .where("settings.notificationsEnabled", "==", true)
@@ -59,8 +55,6 @@ export async function GET(req: NextRequest) {
     }
 
     const messages: admin.messaging.Message[] = [];
-    const now = new Date();
-    const twoDaysAgo = new Date(now.getTime() - 48 * 60 * 60 * 1000);
 
     for (const userDoc of usersSnap.docs) {
       const userData = userDoc.data();
@@ -70,45 +64,45 @@ export async function GET(req: NextRequest) {
       const name: string = userData.name || "amigo";
       const uid = userDoc.id;
 
-      // ── Inactividad: saltar usuarios que sí abrieron la app ──────────────
-      if (cronType === "inactive") {
-        const lastLogin = userData.lastLogin?.toDate?.() as Date | undefined;
-        if (!lastLogin || lastLogin > twoDaysAgo) continue; // activo reciente → skip
-      }
-
-      let title = "";
-      let body = "";
-
       const habit = await getActiveHabit(db, uid);
       const streak: number = habit?.currentStreak ?? 0;
       const habitName: string = habit?.name ?? "tu hábito";
 
-      switch (cronType) {
-        case "morning":
-          title = `Buenos días, ${name} ☀️`;
-          body = streak > 0
-            ? `Día ${streak + 1} comienza ahora. Cada mañana limpia suma.`
-            : `Un nuevo día, una nueva oportunidad. Hoy empieza tu racha.`;
-          break;
+      // Verificar inactividad (+48h sin abrir la app)
+      const lastLogin = userData.lastLogin?.toDate?.() as Date | undefined;
+      const isInactive = lastLogin && lastLogin < twoDaysAgo;
 
-        case "evening":
-          title = `Buenas noches, ${name} 🌙`;
-          body = streakMessage(streak, name, habitName);
-          break;
+      let title = "";
+      let body = "";
 
-        case "inactive": {
-          const daysSinceSeen = Math.floor(
-            (now.getTime() - (userData.lastLogin?.toDate?.()?.getTime() ?? 0)) / 86_400_000
-          );
-          title = `${name}, ¿sigues ahí? 👀`;
-          body = streak > 0
-            ? `Llevas ${streak} días con ${habitName}. No dejes que el tiempo trabaje en contra.`
-            : `Hace ${daysSinceSeen} días que no abres Pulso. Hoy puede ser el día 1.`;
-          break;
+      if (isInactive) {
+        // Inactividad tiene prioridad — el usuario lleva días sin abrir
+        title = `${name}, ¿sigues ahí? 👀`;
+        body = streak > 0
+          ? `Llevas ${streak} días con ${habitName}. No dejes que el tiempo trabaje en contra.`
+          : "Hace tiempo que no te ves por aquí. Hoy puede ser el día 1.";
+      } else if (isMorning) {
+        title = `Buenos días, ${name} ☀️`;
+        body = streak > 0
+          ? `Día ${streak + 1} comienza ahora. Cada mañana limpia suma.`
+          : "Un nuevo día, una nueva oportunidad. Hoy empieza tu racha.";
+      } else {
+        // Noche
+        title = `Buenas noches, ${name} 🌙`;
+        if (streak === 0) {
+          body = `Hoy puede ser el día 1 con ${habitName}. Tú puedes.`;
+        } else if (streak === 1) {
+          body = `Día 1 logrado. Que duermas limpio esta noche.`;
+        } else if (streak < 7) {
+          body = `${streak} días con ${habitName}. La racha es real.`;
+        } else if (streak < 30) {
+          body = `${streak} días limpio. Estás construyendo algo poderoso.`;
+        } else if (streak < 90) {
+          body = `${streak} días. Eres más fuerte que lo que te detuvo antes.`;
+        } else {
+          body = `${streak} días. Eres un ejemplo. Sigue.`;
         }
       }
-
-      if (!title) continue;
 
       messages.push({
         token,
@@ -117,7 +111,7 @@ export async function GET(req: NextRequest) {
           notification: {
             icon: "/icons/icon-192.png",
             badge: "/icons/icon-192.png",
-            tag: `pulso-cron-${cronType}`,
+            tag: "pulso-daily",
             requireInteraction: false,
           },
           fcmOptions: { link: "/" },
@@ -129,7 +123,6 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ sent: 0, message: "Sin mensajes para enviar" });
     }
 
-    // Enviar en lotes de 500 (límite Firebase)
     const BATCH = 500;
     let totalSent = 0;
     let totalFailed = 0;
@@ -140,7 +133,7 @@ export async function GET(req: NextRequest) {
       totalSent += response.successCount;
       totalFailed += response.failureCount;
 
-      // Limpiar tokens caducados
+      // Limpiar tokens caducados de Firestore
       for (let j = 0; j < response.responses.length; j++) {
         const res = response.responses[j];
         if (!res.success) {
@@ -160,8 +153,8 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    console.log(`[Notify:${cronType}] Enviadas: ${totalSent}, Fallidas: ${totalFailed}`);
-    return NextResponse.json({ sent: totalSent, failed: totalFailed, type: cronType });
+    console.log(`[Notify] Colombia=${colombiaHour}h | Enviadas: ${totalSent}, Fallidas: ${totalFailed}`);
+    return NextResponse.json({ sent: totalSent, failed: totalFailed, colombiaHour });
   } catch (err) {
     console.error("[Notify] Error:", err);
     return NextResponse.json({ error: "Error interno" }, { status: 500 });

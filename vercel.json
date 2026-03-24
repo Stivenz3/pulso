@@ -6,16 +6,12 @@
   "regions": ["iad1"],
   "crons": [
     {
-      "path": "/api/notify?type=morning",
+      "path": "/api/notify",
       "schedule": "0 13 * * *"
     },
     {
-      "path": "/api/notify?type=evening",
+      "path": "/api/notify",
       "schedule": "0 2 * * *"
-    },
-    {
-      "path": "/api/notify?type=inactive",
-      "schedule": "0 17 * * *"
     }
   ]
 }
