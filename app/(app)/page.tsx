@@ -33,7 +33,7 @@ const pageVariants = {
 
 export default function HomePage() {
   const router = useRouter();
-  const { habits, activeHabitId, user, insights } = useAppStore();
+  const { habits, activeHabitId, user, insights, triggers, moods, relapses } = useAppStore();
   const [riskOpen, setRiskOpen] = useState(false);
   const [dailyInsight, setDailyInsight] = useState<string | null>(null);
   const [pendingAchievement, setPendingAchievement] = useState<Achievement | null>(null);
@@ -43,39 +43,67 @@ export default function HomePage() {
   const currentStreak = activeHabit?.currentStreak ?? 0;
   const longestStreak = activeHabit?.longestStreak ?? 0;
 
+  // Filtrar datos por hábito activo
+  const habitTriggers = triggers.filter((t) => t.habitId === activeHabit?.id);
+  const habitMoods = moods.filter((m) => m.habitId === activeHabit?.id);
+  const habitRelapses = (relapses ?? []).filter((r) => r.habitId === activeHabit?.id);
+
+  // Insights solo del hábito activo
+  const habitInsights = insights.filter((i) => i.habitId === activeHabit?.id);
+  const latestInsight = habitInsights.find((i) => !i.isRead) || habitInsights[0];
+
   const nextMilestones = [30, 60, 90, 180, 365];
   const nextMilestone = nextMilestones.find((m) => m > currentStreak) ?? 365;
   const milestonePct = Math.min(100, Math.round((currentStreak / nextMilestone) * 100));
   const daysLeft = nextMilestone - currentStreak;
-
-  const latestInsight = insights.find((i) => !i.isRead) || insights[0];
 
   // Detect newly unlocked achievements when streak increases
   useEffect(() => {
     if (!activeHabit) return;
     const prev = prevStreakRef.current;
     prevStreakRef.current = currentStreak;
-
-    if (prev === null) return; // skip on first mount
-
+    if (prev === null) return;
     if (currentStreak > (prev ?? 0)) {
-      const newlyUnlocked = ACHIEVEMENTS.find(
-        (a) => a.days === currentStreak
-      );
-      if (newlyUnlocked) {
-        setPendingAchievement(newlyUnlocked);
-      }
+      const newlyUnlocked = ACHIEVEMENTS.find((a) => a.days === currentStreak);
+      if (newlyUnlocked) setPendingAchievement(newlyUnlocked);
     }
   }, [currentStreak, activeHabit]);
 
   const unlockedAchievements = getUnlockedAchievements(currentStreak);
   const nextAchievement = getNextAchievement(currentStreak);
 
+  // Daily insight con caché localStorage — solo llama a la IA si cambiaron las métricas
   useEffect(() => {
-    if (activeHabit && currentStreak >= 0) {
-      getDailyInsight(activeHabit.name, currentStreak).then(setDailyInsight);
-    }
-  }, [activeHabit?.id, currentStreak]);
+    if (!activeHabit) return;
+
+    // Huella digital de las métricas actuales del hábito
+    const fingerprint = `${activeHabit.id}:${currentStreak}:${habitTriggers.length}:${habitMoods.length}:${habitRelapses.length}`;
+    const cacheKey = `pulso_insight_${activeHabit.id}`;
+
+    // Limpiar insight anterior al cambiar de hábito
+    setDailyInsight(null);
+
+    try {
+      const cached = localStorage.getItem(cacheKey);
+      if (cached) {
+        const { fp, message, ts } = JSON.parse(cached) as { fp: string; message: string; ts: number };
+        const ageHours = (Date.now() - ts) / 3_600_000;
+        if (fp === fingerprint && ageHours < 24) {
+          setDailyInsight(message);
+          return; // métricas iguales y menos de 24h → no llamar a la IA
+        }
+      }
+    } catch { /* localStorage puede fallar en incógnito */ }
+
+    // Métricas cambiaron o caché expiró → llamar a la IA y guardar
+    getDailyInsight(activeHabit.name, currentStreak).then((msg) => {
+      setDailyInsight(msg);
+      try {
+        localStorage.setItem(cacheKey, JSON.stringify({ fp: fingerprint, message: msg, ts: Date.now() }));
+      } catch { /* ignorar */ }
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeHabit?.id, currentStreak, habitTriggers.length, habitMoods.length, habitRelapses.length]);
 
   // No habits yet
   if (!activeHabit) {

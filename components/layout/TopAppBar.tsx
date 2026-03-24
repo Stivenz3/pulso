@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { motion, AnimatePresence } from "framer-motion";
@@ -12,6 +12,23 @@ export default function TopAppBar() {
   const router = useRouter();
   const { habits, activeHabitId, setActiveHabit, user, setShowCreateHabitModal } = useAppStore();
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Cerrar dropdown al tocar/click fuera de él
+  useEffect(() => {
+    if (!dropdownOpen) return;
+    const handler = (e: MouseEvent | TouchEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setDropdownOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    document.addEventListener("touchstart", handler);
+    return () => {
+      document.removeEventListener("mousedown", handler);
+      document.removeEventListener("touchstart", handler);
+    };
+  }, [dropdownOpen]);
 
   const activeHabit = habits.find((h) => h.id === activeHabitId) || habits[0];
   const initial = user?.name?.[0]?.toUpperCase() || "P";
@@ -31,7 +48,7 @@ export default function TopAppBar() {
       </button>
 
       {/* Habit selector */}
-      <div className="flex-1 relative">
+      <div className="flex-1 relative" ref={dropdownRef}>
         <motion.button
           whileTap={{ scale: 0.97 }}
           onClick={() => setDropdownOpen(!dropdownOpen)}
@@ -63,13 +80,6 @@ export default function TopAppBar() {
         <AnimatePresence>
           {dropdownOpen && (
             <>
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                onClick={() => setDropdownOpen(false)}
-                className="fixed inset-0 z-40"
-              />
               <motion.div
                 initial={{ opacity: 0, y: -8, scale: 0.97 }}
                 animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -129,6 +139,7 @@ export default function TopAppBar() {
           )}
         </AnimatePresence>
       </div>
+
 
       {/* Profile avatar */}
       <motion.button

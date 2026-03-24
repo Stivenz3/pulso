@@ -97,7 +97,9 @@ export default function AIInsightsPanel({
     }
   };
 
-  const unreadCount = insights.filter((i) => !i.isRead).length;
+  // Solo mostrar insights del hábito activo
+  const habitInsights = insights.filter((i) => !habit || i.habitId === habit.id);
+  const unreadCount = habitInsights.filter((i) => !i.isRead).length;
 
   return (
     <div className="space-y-3">
@@ -156,7 +158,7 @@ export default function AIInsightsPanel({
         )}
 
         {expanded &&
-          insights.slice(0, 5).map((insight, i) => {
+          habitInsights.slice(0, 5).map((insight, i) => {
             const colors = insightTypeColors[insight.type] || insightTypeColors.suggestion;
             return (
               <motion.div
@@ -182,7 +184,7 @@ export default function AIInsightsPanel({
           })}
       </AnimatePresence>
 
-      {insights.length === 0 && (
+      {habitInsights.length === 0 && (
         <p className="text-[#908fa3] text-xs text-center py-2">
           Pulsa &quot;Analizar&quot; para obtener tu primer insight personalizado
         </p>
