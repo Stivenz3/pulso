@@ -10,7 +10,7 @@ import { updateHabit, deleteHabit } from "@/lib/firestore";
 import { useNotifications } from "@/hooks/useNotifications";
 import {
   Settings, Bell, BellOff, Lock, LogOut,
-  ChevronRight, ChevronUp, ChevronDown, Trash2, Zap, Shield, X,
+  ChevronRight, ChevronUp, ChevronDown, Trash2, Zap, Shield, X, Pencil,
 } from "lucide-react";
 import { getHabitEmoji } from "@/components/habits/CreateHabitModal";
 
@@ -28,6 +28,9 @@ export default function ProfilePage() {
   const [editingWhy, setEditingWhy] = useState(false);
   const [showPrivacy, setShowPrivacy] = useState(false);
   const [habitToDelete, setHabitToDelete] = useState<{ id: string; name: string; streak: number } | null>(null);
+  const [habitToRename, setHabitToRename] = useState<{ id: string; name: string } | null>(null);
+  const [renameText, setRenameText] = useState("");
+  const [renaming, setRenaming] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [notifToast, setNotifToast] = useState<string | null>(null);
   const [showReminderPicker, setShowReminderPicker] = useState(false);
@@ -164,6 +167,29 @@ export default function ProfilePage() {
     }
   };
 
+  const openRenameHabit = (id: string, name: string) => {
+    setHabitToRename({ id, name });
+    setRenameText(name);
+  };
+
+  const confirmRenameHabit = async () => {
+    if (!habitToRename || !user || renaming) return;
+    const nextName = renameText.trim();
+    if (!nextName || nextName === habitToRename.name) {
+      setHabitToRename(null);
+      return;
+    }
+    setRenaming(true);
+    try {
+      await updateHabit(user.uid, habitToRename.id, { name: nextName }).catch(() => {});
+      updateHabitOptimistic(habitToRename.id, { name: nextName });
+      setNotifToast(`Hábito renombrado a "${nextName}"`);
+      setHabitToRename(null);
+    } finally {
+      setRenaming(false);
+    }
+  };
+
   const initial = user?.name?.[0]?.toUpperCase() || "P";
 
   return (
@@ -253,6 +279,14 @@ export default function ProfilePage() {
                   <span className="text-[#c1c1ff]">{habit.currentStreak}d racha</span>
                 </p>
               </div>
+              <button
+                aria-label={`Editar nombre de ${habit.name}`}
+                title={`Editar ${habit.name}`}
+                onClick={() => openRenameHabit(habit.id, habit.name)}
+                className="text-[#454557] active:text-[#c1c1ff] hover:text-[#c1c1ff] transition-all p-2 shrink-0"
+              >
+                <Pencil size={14} />
+              </button>
               <button
                 aria-label={`Eliminar hábito ${habit.name}`}
                 title={`Eliminar ${habit.name}`}
@@ -544,6 +578,54 @@ export default function ProfilePage() {
                   {deleting ? <span className="animate-pulse">Eliminando...</span> : <><Trash2 size={16} /> Sí, eliminar</>}
                 </motion.button>
                 <button onClick={() => setHabitToDelete(null)} className="w-full text-[#908fa3] text-sm py-3 font-bold">
+                  Cancelar
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Rename Habit Modal */}
+      <AnimatePresence>
+        {habitToRename && (
+          <motion.div
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 z-200 bg-black/70 backdrop-blur-sm flex items-end justify-center p-4"
+            onClick={() => setHabitToRename(null)}
+          >
+            <motion.div
+              initial={{ y: 80, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 80, opacity: 0 }}
+              transition={{ type: "spring", damping: 25 }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-[#1f1f23] border border-white/10 rounded-3xl p-6 w-full max-w-sm space-y-4"
+            >
+              <div className="space-y-1">
+                <h3 className="font-[Space_Grotesk] font-bold text-xl text-white">Renombrar hábito</h3>
+                <p className="text-[#908fa3] text-sm">Cambia el nombre de &quot;{habitToRename.name}&quot;</p>
+              </div>
+              <input
+                value={renameText}
+                onChange={(e) => setRenameText(e.target.value)}
+                placeholder="Nuevo nombre del hábito"
+                className="w-full bg-[#353439] border border-white/10 rounded-xl px-4 py-3 text-[#e4e1e7] text-sm outline-none focus:border-[#3832f6]/50 placeholder:text-[#454557]"
+                aria-label="Nuevo nombre del hábito"
+                title="Nuevo nombre del hábito"
+                autoFocus
+                maxLength={50}
+              />
+              <div className="flex gap-2">
+                <button
+                  onClick={confirmRenameHabit}
+                  disabled={renaming || !renameText.trim()}
+                  className="flex-1 bg-[#3832f6] text-white py-3 rounded-xl text-sm font-bold disabled:opacity-50"
+                >
+                  {renaming ? "Guardando..." : "Guardar nombre"}
+                </button>
+                <button
+                  onClick={() => setHabitToRename(null)}
+                  className="px-4 py-3 text-[#908fa3] text-sm font-bold"
+                >
                   Cancelar
                 </button>
               </div>
