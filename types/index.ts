@@ -41,6 +41,7 @@ export interface HabitDoc {
 
   cleanDaysTotal: number;
   relapsesAvoided: number;
+  reminderHour?: number | null; // hora local 0-23 para recordatorio personalizado
   lastStreakDate?: string; // "YYYY-MM-DD" in local timezone — used to detect if today was already counted
 }
 

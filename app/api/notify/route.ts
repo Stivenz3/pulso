@@ -10,14 +10,18 @@ import admin from "@/lib/firebase-admin";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-async function getActiveHabit(db: admin.firestore.Firestore, uid: string) {
+async function getActiveHabits(db: admin.firestore.Firestore, uid: string) {
   const snap = await db
     .collection("users").doc(uid)
     .collection("habits")
     .where("isActive", "==", true)
-    .limit(1)
     .get();
-  return snap.empty ? null : snap.docs[0].data();
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() })) as Array<{
+    id: string;
+    name?: string;
+    currentStreak?: number;
+    reminderHour?: number | null;
+  }>;
 }
 
 export async function GET(req: NextRequest) {
@@ -55,6 +59,7 @@ export async function GET(req: NextRequest) {
     }
 
     const messages: admin.messaging.Message[] = [];
+    const messageUserIds: string[] = [];
 
     for (const userDoc of usersSnap.docs) {
       const userData = userDoc.data();
@@ -64,63 +69,55 @@ export async function GET(req: NextRequest) {
       const name: string = userData.name || "amigo";
       const uid = userDoc.id;
 
-      // Hora personalizada del usuario — si está configurada y no coincide, saltar
-      const customHour: number | undefined = userData.settings?.reminderHour;
-      if (customHour !== undefined && customHour !== colombiaHour) continue;
-
-      const habit = await getActiveHabit(db, uid);
-      const streak: number = habit?.currentStreak ?? 0;
-      const habitName: string = habit?.name ?? "tu hábito";
-
       // Verificar inactividad (+48h sin abrir la app)
       const lastLogin = userData.lastLogin?.toDate?.() as Date | undefined;
       const isInactive = lastLogin && lastLogin < twoDaysAgo;
+      const habits = await getActiveHabits(db, uid);
+      for (const habit of habits) {
+        const streak: number = Number(habit.currentStreak ?? 0);
+        const habitName: string = String(habit.name ?? "tu hábito");
+        const customHour: number | null =
+          typeof habit.reminderHour === "number" ? habit.reminderHour : null;
+        if (customHour !== null && customHour !== colombiaHour) continue;
 
-      let title = "";
-      let body = "";
+        let title = "";
+        let body = "";
 
-      if (isInactive) {
-        // Inactividad tiene prioridad — el usuario lleva días sin abrir
-        title = `${name}, ¿sigues ahí? 👀`;
-        body = streak > 0
-          ? `Llevas ${streak} días con ${habitName}. No dejes que el tiempo trabaje en contra.`
-          : "Hace tiempo que no te ves por aquí. Hoy puede ser el día 1.";
-      } else if (isMorning) {
-        title = `Buenos días, ${name} ☀️`;
-        body = streak > 0
-          ? `Día ${streak + 1} comienza ahora. Cada mañana limpia suma.`
-          : "Un nuevo día, una nueva oportunidad. Hoy empieza tu racha.";
-      } else {
-        // Noche
-        title = `Buenas noches, ${name} 🌙`;
-        if (streak === 0) {
-          body = `Hoy puede ser el día 1 con ${habitName}. Tú puedes.`;
-        } else if (streak === 1) {
-          body = `Día 1 logrado. Que duermas limpio esta noche.`;
-        } else if (streak < 7) {
-          body = `${streak} días con ${habitName}. La racha es real.`;
-        } else if (streak < 30) {
-          body = `${streak} días limpio. Estás construyendo algo poderoso.`;
-        } else if (streak < 90) {
-          body = `${streak} días. Eres más fuerte que lo que te detuvo antes.`;
+        if (isInactive) {
+          title = `${name}, ¿sigues ahí? 👀`;
+          body = streak > 0
+            ? `Llevas ${streak} días con ${habitName}. No dejes que el tiempo trabaje en contra.`
+            : `Hace tiempo que no practicas ${habitName}. Hoy puede ser el día 1.`;
+        } else if (isMorning) {
+          title = `Buenos días, ${name} ☀️`;
+          body = streak > 0
+            ? `Día ${streak + 1} de ${habitName} comienza ahora.`
+            : `Un nuevo día para empezar con ${habitName}.`;
         } else {
-          body = `${streak} días. Eres un ejemplo. Sigue.`;
+          title = `Buenas noches, ${name} 🌙`;
+          if (streak === 0) body = `Hoy puede ser el día 1 con ${habitName}. Tú puedes.`;
+          else if (streak === 1) body = `Día 1 de ${habitName} logrado.`;
+          else if (streak < 7) body = `${streak} días con ${habitName}. La racha es real.`;
+          else if (streak < 30) body = `${streak} días con ${habitName}. Estás construyendo algo poderoso.`;
+          else if (streak < 90) body = `${streak} días con ${habitName}. Vas muy fuerte.`;
+          else body = `${streak} días con ${habitName}. Eres un ejemplo.`;
         }
-      }
 
-      messages.push({
-        token,
-        notification: { title, body },
-        webpush: {
-          notification: {
-            icon: "/icons/icon-192.png",
-            badge: "/icons/icon-192.png",
-            tag: "pulso-daily",
-            requireInteraction: false,
+        messages.push({
+          token,
+          notification: { title, body },
+          webpush: {
+            notification: {
+              icon: "/icons/icon-192.png",
+              badge: "/icons/icon-192.png",
+              tag: `pulso-daily-${habit.id}`,
+              requireInteraction: false,
+            },
+            fcmOptions: { link: "/" },
           },
-          fcmOptions: { link: "/" },
-        },
-      });
+        });
+        messageUserIds.push(uid);
+      }
     }
 
     if (messages.length === 0) {
@@ -146,7 +143,7 @@ export async function GET(req: NextRequest) {
             code === "messaging/registration-token-not-registered" ||
             code === "messaging/invalid-registration-token"
           ) {
-            const docId = usersSnap.docs[i + j]?.id;
+            const docId = messageUserIds[i + j];
             if (docId) {
               await db.collection("users").doc(docId).update({
                 fcmToken: admin.firestore.FieldValue.delete(),

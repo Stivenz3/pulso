@@ -6,7 +6,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useRouter } from "next/navigation";
 import { useAppStore } from "@/lib/store";
 import { logoutUser } from "@/lib/auth";
-import { updateHabit, deleteHabit, updateUserDoc } from "@/lib/firestore";
+import { updateHabit, deleteHabit } from "@/lib/firestore";
 import { useNotifications } from "@/hooks/useNotifications";
 import {
   Settings, Bell, BellOff, Lock, LogOut,
@@ -45,6 +45,15 @@ export default function ProfilePage() {
     }
   }, [notifToast]);
 
+  useEffect(() => {
+    setReminderHour(activeHabit?.reminderHour ?? null);
+    setShowReminderPicker(false);
+  }, [activeHabit?.id, activeHabit?.reminderHour]);
+
+  useEffect(() => {
+    if (!editingWhy) setWhyText(activeHabit?.reason || "");
+  }, [activeHabit?.id, activeHabit?.reason, editingWhy]);
+
   const saveWhy = async () => {
     if (user && activeHabit) {
       await updateHabit(user.uid, activeHabit.id, { reason: whyText }).catch(() => {});
@@ -60,14 +69,12 @@ export default function ProfilePage() {
   };
 
   const saveReminderHour = async (hour: number) => {
+    if (!user || !activeHabit) return;
     setReminderHour(hour);
     setShowReminderPicker(false);
-    if (user) {
-      await updateUserDoc(user.uid, {
-        settings: { notificationsEnabled: true, theme: "dark", reminderHour: hour } as never,
-      }).catch(() => {});
-      setNotifToast(`Recordatorio personalizado a las ${hour}:00`);
-    }
+    await updateHabit(user.uid, activeHabit.id, { reminderHour: hour }).catch(() => {});
+    updateHabitOptimistic(activeHabit.id, { reminderHour: hour });
+    setNotifToast(`Recordatorio para ${activeHabit.name} a las ${hour}:00`);
   };
 
   const toggleNotifications = async () => {
@@ -242,7 +249,10 @@ export default function ProfilePage() {
                 <p className="text-[10px] text-[#908fa3]">
                   {notifStatus === "unsupported" && "No soportado en este navegador"}
                   {notifStatus === "denied" && "Bloqueado — activa en ajustes del sistema"}
-                  {notifStatus === "granted" && "Activos · 9 PM cada día"}
+                  {notifStatus === "granted" &&
+                    (reminderHour !== null
+                      ? `Activos · ${reminderHour}:00 para ${activeHabit?.name ?? "este hábito"}`
+                      : "Activos · 8 AM y 9 PM")}
                   {notifStatus === "default" && "Toca para activar"}
                 </p>
               </div>
@@ -309,7 +319,14 @@ export default function ProfilePage() {
                     </div>
                     {reminderHour !== null && (
                       <button
-                        onClick={() => { setReminderHour(null); setShowReminderPicker(false); }}
+                        onClick={async () => {
+                          if (!user || !activeHabit) return;
+                          setReminderHour(null);
+                          setShowReminderPicker(false);
+                          await updateHabit(user.uid, activeHabit.id, { reminderHour: null }).catch(() => {});
+                          updateHabitOptimistic(activeHabit.id, { reminderHour: null });
+                          setNotifToast(`Horario por defecto para ${activeHabit.name}`);
+                        }}
                         className="mt-3 text-[10px] text-[#454557] w-full text-center"
                       >
                         Usar horarios por defecto (8 AM y 9 PM)

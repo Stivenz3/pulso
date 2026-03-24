@@ -139,6 +139,7 @@ export async function createHabit(
     aiCategory: data.aiCategory || "",
     cleanDaysTotal: 0,
     relapsesAvoided: 0,
+    reminderHour: null,
   };
   console.log("[Firestore] createHabit →", { uid, id, name: data.name });
   try {
