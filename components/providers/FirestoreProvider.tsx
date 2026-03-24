@@ -86,8 +86,12 @@ export default function FirestoreProvider({ children }: { children: React.ReactN
         const title = payload.notification?.title ?? "Pulso";
         const body = payload.notification?.body ?? "Mantén tu racha.";
         const reminderKey = payload.data?.reminderKey;
+        const source = payload.data?.source;
         if (reminderKey && seenKeys.has(reminderKey)) return;
         if (reminderKey) seenKeys.add(reminderKey);
+        // Evita duplicados: las notificaciones programadas ya las maneja el SW.
+        // En foreground no mostrar notificación del sistema para source=scheduled.
+        if (source === "scheduled") return;
         if (Notification.permission === "granted") {
           new Notification(title, {
             body,
