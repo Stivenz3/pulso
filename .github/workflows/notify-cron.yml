@@ -5,6 +5,12 @@ on:
     # Cada 15 minutos (UTC)
     - cron: "*/15 * * * *"
   workflow_dispatch:
+    inputs:
+      force_now:
+        description: "Forzar envio inmediato (ignora filtros de hora)"
+        required: false
+        type: boolean
+        default: false
 
 jobs:
   run-notify:
@@ -41,7 +47,12 @@ jobs:
               ;;
           esac
 
-          URL="${APP_URL_CLEAN%/}/api/notify"
+          FORCE_NOW="${{ github.event.inputs.force_now || 'false' }}"
+          if [ "$FORCE_NOW" = "true" ]; then
+            URL="${APP_URL_CLEAN%/}/api/notify?forceNow=1"
+          else
+            URL="${APP_URL_CLEAN%/}/api/notify"
+          fi
           echo "Calling $URL"
 
           # Hasta 3 intentos con backoff
