@@ -66,6 +66,15 @@ export async function logoutUser(): Promise<void> {
   await signOut(auth);
 }
 
+/** Actualiza el nombre visible en Firebase Auth (requiere sesión activa). */
+export async function updateUserDisplayName(name: string): Promise<void> {
+  const u = auth.currentUser;
+  if (!u) throw new Error("auth/no-current-user");
+  const trimmed = name.trim();
+  if (!trimmed) throw new Error("auth/invalid-display-name");
+  await updateProfile(u, { displayName: trimmed });
+}
+
 export function onAuthChange(
   callback: (user: AuthResult | null) => void
 ): Unsubscribe {

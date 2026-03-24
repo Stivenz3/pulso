@@ -5,8 +5,8 @@ import Image from "next/image";
 import { motion, AnimatePresence } from "framer-motion";
 import { useRouter } from "next/navigation";
 import { useAppStore } from "@/lib/store";
-import { logoutUser } from "@/lib/auth";
-import { updateHabit, deleteHabit } from "@/lib/firestore";
+import { logoutUser, updateUserDisplayName } from "@/lib/auth";
+import { updateHabit, deleteHabit, updateUserDoc } from "@/lib/firestore";
 import { useNotifications } from "@/hooks/useNotifications";
 import {
   Settings, Bell, BellOff, Lock, LogOut,
@@ -21,7 +21,8 @@ const pageVariants = {
 
 export default function ProfilePage() {
   const router = useRouter();
-  const { user, habits, clearSession, updateHabitOptimistic, setHabits, activeHabitId, setShowCreateHabitModal } = useAppStore();
+  const { user, habits, clearSession, updateHabitOptimistic, setHabits, activeHabitId, setShowCreateHabitModal, setUser } =
+    useAppStore();
   const activeHabit = habits.find((h) => h.id === activeHabitId) || habits[0];
 
   const [whyText, setWhyText] = useState(activeHabit?.reason || "");
@@ -39,6 +40,9 @@ export default function ProfilePage() {
   const [wheelHour, setWheelHour] = useState<number>(8);
   const [wheelMinute, setWheelMinute] = useState<number>(0);
   const [wheelPeriod, setWheelPeriod] = useState<"AM" | "PM">("AM");
+  const [showAccountModal, setShowAccountModal] = useState(false);
+  const [accountNameDraft, setAccountNameDraft] = useState("");
+  const [savingAccountName, setSavingAccountName] = useState(false);
 
   const { status: notifStatus, loading: notifLoading, enabled: notifEnabled, enable: enableNotifs, disable: disableNotifs } =
     useNotifications(user?.uid ?? null);
@@ -172,6 +176,32 @@ export default function ProfilePage() {
     setRenameText(name);
   };
 
+  const openAccountModal = () => {
+    setAccountNameDraft(user?.name?.trim() || "");
+    setShowAccountModal(true);
+  };
+
+  const saveAccountName = async () => {
+    if (!user || savingAccountName) return;
+    const next = accountNameDraft.trim();
+    if (!next || next === user.name) {
+      setShowAccountModal(false);
+      return;
+    }
+    setSavingAccountName(true);
+    try {
+      await updateUserDisplayName(next);
+      await updateUserDoc(user.uid, { name: next });
+      setUser({ ...user, name: next });
+      setNotifToast("Nombre actualizado");
+      setShowAccountModal(false);
+    } catch {
+      setNotifToast("No se pudo guardar el nombre");
+    } finally {
+      setSavingAccountName(false);
+    }
+  };
+
   const confirmRenameHabit = async () => {
     if (!habitToRename || !user || renaming) return;
     const nextName = renameText.trim();
@@ -208,9 +238,14 @@ export default function ProfilePage() {
               <img src={user.photoURL} alt="perfil" className="w-full h-full rounded-full object-cover" />
             ) : initial}
           </div>
-          <div className="absolute bottom-0 right-0 bg-[#3832f6] text-white p-1.5 rounded-full">
+          <button
+            onClick={openAccountModal}
+            aria-label="Ajustes de cuenta: cambiar nombre"
+            title="Cambiar tu nombre"
+            className="absolute bottom-0 right-0 bg-[#3832f6] text-white p-1.5 rounded-full active:scale-95 transition-transform"
+          >
             <Settings size={11} />
-          </div>
+          </button>
         </div>
         <h2 className="font-[Space_Grotesk] text-2xl font-bold text-white">{user?.name || "Usuario"}</h2>
         <p className="text-[#908fa3] text-sm">{user?.email}</p>
@@ -543,6 +578,79 @@ export default function ProfilePage() {
           <span className="font-[Manrope] text-sm font-bold uppercase tracking-widest">Cerrar sesión</span>
         </motion.button>
       </section>
+
+      {/* Cuenta: nombre (tuerca del avatar) */}
+      <AnimatePresence>
+        {showAccountModal && (
+          <motion.div
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 z-210 bg-black/70 backdrop-blur-sm flex items-end justify-center p-4"
+            onClick={() => setShowAccountModal(false)}
+          >
+            <motion.div
+              initial={{ y: 80, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 80, opacity: 0 }}
+              transition={{ type: "spring", damping: 25 }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-[#1f1f23] border border-white/10 rounded-3xl p-6 w-full max-w-sm space-y-4"
+            >
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="shrink-0 w-10 h-10 rounded-xl bg-[#3832f6]/20 flex items-center justify-center text-[#c1c1ff]">
+                    <Settings size={20} strokeWidth={1.8} />
+                  </div>
+                  <div className="min-w-0">
+                    <h3 className="font-[Space_Grotesk] font-bold text-lg text-white">Tu cuenta</h3>
+                    <p className="text-[#908fa3] text-xs truncate" title={user?.email}>
+                      {user?.email}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowAccountModal(false)}
+                  className="text-[#908fa3] shrink-0 p-1"
+                  aria-label="Cerrar"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+              <div className="space-y-2">
+                <label htmlFor="account-display-name" className="text-[10px] font-bold uppercase tracking-widest text-[#908fa3]">
+                  Nombre para mostrar
+                </label>
+                <input
+                  id="account-display-name"
+                  value={accountNameDraft}
+                  onChange={(e) => setAccountNameDraft(e.target.value)}
+                  placeholder="Tu nombre"
+                  className="w-full bg-[#353439] border border-white/10 rounded-xl px-4 py-3 text-[#e4e1e7] text-sm outline-none focus:border-[#3832f6]/50 placeholder:text-[#454557]"
+                  aria-label="Nombre para mostrar"
+                  autoFocus
+                  maxLength={48}
+                  autoComplete="name"
+                />
+              </div>
+              <div className="flex gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={saveAccountName}
+                  disabled={savingAccountName || !accountNameDraft.trim()}
+                  className="flex-1 bg-[#3832f6] text-white py-3 rounded-xl text-sm font-bold disabled:opacity-50"
+                >
+                  {savingAccountName ? "Guardando..." : "Guardar"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowAccountModal(false)}
+                  className="px-4 py-3 text-[#908fa3] text-sm font-bold"
+                >
+                  Cancelar
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Delete Habit Confirmation */}
       <AnimatePresence>
