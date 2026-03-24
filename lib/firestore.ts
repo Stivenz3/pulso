@@ -104,6 +104,15 @@ export async function updateUserDoc(
   await updateDoc(userRef(uid), data as Record<string, unknown>);
 }
 
+export async function saveFcmToken(uid: string, token: string): Promise<void> {
+  await updateDoc(userRef(uid), { fcmToken: token, fcmUpdatedAt: serverTimestamp() });
+}
+
+export async function removeFcmToken(uid: string): Promise<void> {
+  const { deleteField } = await import("firebase/firestore");
+  await updateDoc(userRef(uid), { fcmToken: deleteField() });
+}
+
 // ─── HABITS ──────────────────────────────────────────────────────────────────
 export async function createHabit(
   uid: string,

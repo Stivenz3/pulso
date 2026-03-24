@@ -1,14 +1,15 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Image from "next/image";
 import { motion, AnimatePresence } from "framer-motion";
 import { useRouter } from "next/navigation";
 import { useAppStore } from "@/lib/store";
 import { logoutUser } from "@/lib/auth";
-import { updateHabit, deleteHabit, updateUserDoc } from "@/lib/firestore";
+import { updateHabit, deleteHabit } from "@/lib/firestore";
+import { useNotifications } from "@/hooks/useNotifications";
 import {
-  Settings, Bell, Lock, LogOut,
+  Settings, Bell, BellOff, Lock, LogOut,
   ChevronRight, Trash2, Zap, Shield, X,
 } from "lucide-react";
 import { getHabitEmoji } from "@/components/habits/CreateHabitModal";
@@ -25,10 +26,22 @@ export default function ProfilePage() {
 
   const [whyText, setWhyText] = useState(activeHabit?.reason || "");
   const [editingWhy, setEditingWhy] = useState(false);
-  const [notifications, setNotifications] = useState(true);
   const [showPrivacy, setShowPrivacy] = useState(false);
   const [habitToDelete, setHabitToDelete] = useState<{ id: string; name: string; streak: number } | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [notifToast, setNotifToast] = useState<string | null>(null);
+
+  const { status: notifStatus, loading: notifLoading, enable: enableNotifs, disable: disableNotifs } =
+    useNotifications(user?.uid ?? null);
+
+  const notificationsEnabled = notifStatus === "granted";
+
+  useEffect(() => {
+    if (notifToast) {
+      const t = setTimeout(() => setNotifToast(null), 3000);
+      return () => clearTimeout(t);
+    }
+  }, [notifToast]);
 
   const saveWhy = async () => {
     if (user && activeHabit) {
@@ -45,12 +58,21 @@ export default function ProfilePage() {
   };
 
   const toggleNotifications = async () => {
-    const next = !notifications;
-    setNotifications(next);
-    if (user) {
-      await updateUserDoc(user.uid, {
-        settings: { notificationsEnabled: next, theme: "dark" },
-      }).catch(() => {});
+    if (notifStatus === "unsupported") {
+      setNotifToast("Tu navegador no soporta notificaciones push");
+      return;
+    }
+    if (notifStatus === "denied") {
+      setNotifToast("Permite las notificaciones en la configuración del navegador");
+      return;
+    }
+    if (notificationsEnabled) {
+      await disableNotifs();
+      setNotifToast("Recordatorios desactivados");
+    } else {
+      const ok = await enableNotifs();
+      if (ok) setNotifToast("¡Listo! Recibirás recordatorios diarios");
+      else setNotifToast("No se pudieron activar las notificaciones");
     }
   };
 
@@ -198,22 +220,35 @@ export default function ProfilePage() {
           {/* Notifications */}
           <div className="flex items-center justify-between p-5">
             <div className="flex items-center gap-3">
-              <Bell size={18} className={notifications ? "text-[#c1c1ff]" : "text-[#908fa3]"} strokeWidth={1.8} />
+              {notificationsEnabled
+                ? <Bell size={18} className="text-[#c1c1ff]" strokeWidth={1.8} />
+                : <BellOff size={18} className="text-[#908fa3]" strokeWidth={1.8} />
+              }
               <div>
                 <span className="font-[Manrope] text-sm font-medium text-[#e4e1e7]">Recordatorios diarios</span>
-                <p className="text-[10px] text-[#908fa3]">{notifications ? "Activos" : "Desactivados"}</p>
+                <p className="text-[10px] text-[#908fa3]">
+                  {notifStatus === "unsupported" && "No soportado en este navegador"}
+                  {notifStatus === "denied" && "Bloqueado — activa en ajustes del sistema"}
+                  {notifStatus === "granted" && "Activos · 9 PM cada día"}
+                  {notifStatus === "default" && "Toca para activar"}
+                </p>
               </div>
             </div>
             <button
               onClick={toggleNotifications}
-              aria-label={notifications ? "Desactivar recordatorios" : "Activar recordatorios"}
-              className={`w-11 h-6 rounded-full relative flex items-center px-1 transition-colors duration-300 ${notifications ? "bg-[#3832f6]" : "bg-[#353439]"}`}
+              disabled={notifLoading || notifStatus === "unsupported" || notifStatus === "denied"}
+              aria-label={notificationsEnabled ? "Desactivar recordatorios" : "Activar recordatorios"}
+              className={`w-11 h-6 rounded-full relative flex items-center px-1 transition-colors duration-300 disabled:opacity-40 ${notificationsEnabled ? "bg-[#3832f6]" : "bg-[#353439]"}`}
             >
-              <motion.div
-                animate={{ x: notifications ? 18 : 0 }}
-                transition={{ type: "spring", stiffness: 500, damping: 30 }}
-                className="w-4 h-4 bg-white rounded-full shadow-md"
-              />
+              {notifLoading ? (
+                <div className="w-4 h-4 bg-white/60 rounded-full shadow-md animate-pulse mx-auto" />
+              ) : (
+                <motion.div
+                  animate={{ x: notificationsEnabled ? 18 : 0 }}
+                  transition={{ type: "spring", stiffness: 500, damping: 30 }}
+                  className="w-4 h-4 bg-white rounded-full shadow-md"
+                />
+              )}
             </button>
           </div>
 
@@ -287,6 +322,21 @@ export default function ProfilePage() {
                 </button>
               </div>
             </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Notification Toast */}
+      <AnimatePresence>
+        {notifToast && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 20 }}
+            className="fixed bottom-24 left-4 right-4 z-300 bg-[#1f1f23] border border-[#3832f6]/30 rounded-2xl px-4 py-3 flex items-center gap-3 shadow-xl"
+          >
+            <Bell size={16} className="text-[#c1c1ff] shrink-0" />
+            <p className="text-sm text-[#e4e1e7] font-[Manrope]">{notifToast}</p>
           </motion.div>
         )}
       </AnimatePresence>
