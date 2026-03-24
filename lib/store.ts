@@ -35,6 +35,8 @@ interface AppState {
   // UI flags
   showCreateHabitModal: boolean;
   setShowCreateHabitModal: (val: boolean) => void;
+  habitsReady: boolean;        // true después del primer setHabits con datos reales
+  isHabitSwitching: boolean;   // true durante ~400ms al cambiar hábito en dropdown
 
   // Actions — auth
   setUser: (user: LocalUser | null) => void;
@@ -82,6 +84,8 @@ const EMPTY_STATE = {
   lastMoodTimestamp: {},
   relapses: [],
   showCreateHabitModal: false,
+  habitsReady: false,
+  isHabitSwitching: false,
 };
 
 export const useAppStore = create<AppState>()((set, get) => ({
@@ -99,10 +103,14 @@ export const useAppStore = create<AppState>()((set, get) => ({
   clearSession: () => set({ ...EMPTY_STATE, isLoading: false }),
 
   // ── Data setters (replace full collection) ────────────────────────────────
-  setActiveHabit: (id) => set({ activeHabitId: id }),
+  setActiveHabit: (id) => {
+    set({ activeHabitId: id, isHabitSwitching: true });
+    setTimeout(() => set({ isHabitSwitching: false }), 350);
+  },
   setHabits: (habits) =>
     set((s) => ({
       habits,
+      habitsReady: true,
       activeHabitId: s.activeHabitId ?? habits[0]?.id ?? null,
     })),
   setMoods: (moods) => set({ moods }),

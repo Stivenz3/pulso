@@ -72,16 +72,41 @@ export default function TriggersPage() {
   }, {});
   const topTrigger = Object.entries(triggerCounts).sort((a, b) => b[1] - a[1])[0];
 
-  // Sugerencias de IA basadas en el hábito
+  // Sugerencias de IA — caché por hábito
   useEffect(() => {
-    if (activeHabit) {
-      getTriggerSuggestions(activeHabit.name, activeHabit.type).then(setAiSuggestions);
-    }
+    if (!activeHabit) return;
+    const cacheKey = `pulso_suggestions_${activeHabit.id}`;
+    try {
+      const cached = localStorage.getItem(cacheKey);
+      if (cached) {
+        const { suggestions, ts } = JSON.parse(cached);
+        if (Date.now() - ts < 24 * 3_600_000) { setAiSuggestions(suggestions); return; }
+      }
+    } catch { /* ignore */ }
+    getTriggerSuggestions(activeHabit.name, activeHabit.type).then((s) => {
+      setAiSuggestions(s);
+      try { localStorage.setItem(cacheKey, JSON.stringify({ suggestions: s, ts: Date.now() })); } catch { /* ignore */ }
+    });
   }, [activeHabit?.id]);
 
-  // Análisis de patrón real con IA cuando hay suficientes datos
+  // Análisis de patrón con IA — solo si cambian las métricas
   useEffect(() => {
     if (!activeHabit || habitTriggers.length < 2) return;
+
+    // Huella digital: cambia solo si hay nuevos triggers, moods o cambió el hábito
+    const fingerprint = `${activeHabit.id}:${habitTriggers.length}:${moods.length}:${activeHabit.currentStreak}`;
+    const cacheKey = `pulso_pattern_${activeHabit.id}`;
+
+    try {
+      const cached = localStorage.getItem(cacheKey);
+      if (cached) {
+        const { fp, analysis, ts } = JSON.parse(cached);
+        if (fp === fingerprint && Date.now() - ts < 24 * 3_600_000) {
+          setPatternAnalysis(analysis);
+          return; // métricas sin cambios → usar caché
+        }
+      }
+    } catch { /* ignore */ }
 
     setLoadingPattern(true);
     const recentMoods = moods.slice(0, 10).map((m) => `${m.mood}(intensidad:${m.intensity})`);
@@ -90,7 +115,6 @@ export default function TriggersPage() {
       acc[label] = (acc[label] || 0) + 1;
       return acc;
     }, {});
-    // Notas de triggers como contexto adicional para la IA
     const triggerNotes = habitTriggers
       .filter((t) => t.note)
       .slice(0, 5)
@@ -111,10 +135,18 @@ export default function TriggersPage() {
       }),
     })
       .then((r) => r.json())
-      .then((d) => { if (d.result) setPatternAnalysis(d.result); })
+      .then((d) => {
+        if (d.result) {
+          setPatternAnalysis(d.result);
+          try {
+            localStorage.setItem(cacheKey, JSON.stringify({ fp: fingerprint, analysis: d.result, ts: Date.now() }));
+          } catch { /* ignore */ }
+        }
+      })
       .catch(() => {})
       .finally(() => setLoadingPattern(false));
-  }, [habitTriggers.length, moods.length, activeHabit?.id]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [habitTriggers.length, moods.length, activeHabit?.id, activeHabit?.currentStreak]);
 
   return (
     <motion.div
