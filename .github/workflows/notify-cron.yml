@@ -16,29 +16,47 @@ jobs:
           APP_URL: ${{ secrets.APP_URL }}
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
         run: |
-          set -euo pipefail
+          set -eo pipefail
 
-          if [ -z "${APP_URL:-}" ]; then
+          # Normalizar secrets (quitar CR/LF y espacios al inicio/fin)
+          APP_URL_CLEAN="$(printf '%s' "${APP_URL:-}" | tr -d '\r\n' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
+          CRON_SECRET_CLEAN="$(printf '%s' "${CRON_SECRET:-}" | tr -d '\r\n' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
+
+          if [ -z "$APP_URL_CLEAN" ]; then
             echo "Missing APP_URL secret"
             exit 1
           fi
-          if [ -z "${CRON_SECRET:-}" ]; then
+          if [ -z "$CRON_SECRET_CLEAN" ]; then
             echo "Missing CRON_SECRET secret"
             exit 1
           fi
 
-          URL="${APP_URL_CLEAN%/}/api/notify?forceNow=1"
+          # Validar formato de URL
+          case "$APP_URL_CLEAN" in
+            http://*|https://*) ;;
+            *)
+              echo "APP_URL inválida. Debe iniciar con http:// o https://"
+              echo "Valor recibido (oculto parcialmente): ${APP_URL_CLEAN:0:12}..."
+              exit 1
+              ;;
+          esac
+
+          URL="${APP_URL_CLEAN%/}/api/notify"
           echo "Calling $URL"
 
           # Hasta 3 intentos con backoff
           for i in 1 2 3; do
             HTTP_CODE=$(curl -sS -o response.json -w "%{http_code}" \
-              -H "Authorization: Bearer ${CRON_SECRET}" \
+              -H "Authorization: Bearer ${CRON_SECRET_CLEAN}" \
               -H "Accept: application/json" \
               "$URL" || true)
 
             echo "Attempt $i HTTP $HTTP_CODE"
-            cat response.json || true
+            if [ -f response.json ]; then
+              cat response.json
+            else
+              echo "No response body file"
+            fi
 
             if [ "$HTTP_CODE" -ge 200 ] && [ "$HTTP_CODE" -lt 300 ]; then
               echo "Notify call succeeded"
