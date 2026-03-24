@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import admin from "@/lib/firebase-admin";
 
-// Este endpoint se llama desde 2 crons (ver vercel.json):
+// Endpoint de cron para notificaciones automáticas.
 //   0 13 * * *  → 8 AM Colombia  → saludo matutino
 //   0  2 * * *  → 9 PM Colombia  → saludo nocturno
 // El endpoint detecta la hora Colombia automáticamente (UTC-5).
