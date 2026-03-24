@@ -2,8 +2,8 @@ name: Notify Cron
 
 on:
   schedule:
-    # Cada 15 minutos (UTC)
-    - cron: "*/15 * * * *"
+    # Cada 5 minutos (UTC) para mejorar precisión de recordatorios personalizados
+    - cron: "*/5 * * * *"
   workflow_dispatch:
     inputs:
       force_now:

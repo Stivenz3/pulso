@@ -113,11 +113,12 @@ export async function GET(req: NextRequest) {
           continue;
         }
 
-        // Para minutos personalizados, permitir ventana +-7 min (cron cada 15 min)
+        // Para minutos personalizados, permitir ventana +-12 min.
+        // GitHub Actions no es exacto al minuto, así evitamos falsos negativos.
         if (!forceNow && shouldRunCustomHour && customMinute !== null) {
           const delta = Math.abs(colombiaMinute - customMinute);
           const wrappedDelta = Math.min(delta, 60 - delta);
-          if (wrappedDelta > 7) {
+          if (wrappedDelta > 12) {
             debug.skippedByMinuteWindow += 1;
             continue;
           }
