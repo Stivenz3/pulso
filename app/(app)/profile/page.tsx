@@ -32,6 +32,10 @@ export default function ProfilePage() {
   const [notifToast, setNotifToast] = useState<string | null>(null);
   const [showReminderPicker, setShowReminderPicker] = useState(false);
   const [reminderHour, setReminderHour] = useState<number | null>(null);
+  const [reminderMinute, setReminderMinute] = useState<number>(0);
+  const [wheelHour, setWheelHour] = useState<number>(8);
+  const [wheelMinute, setWheelMinute] = useState<number>(0);
+  const [wheelPeriod, setWheelPeriod] = useState<"AM" | "PM">("AM");
 
   const { status: notifStatus, loading: notifLoading, enable: enableNotifs, disable: disableNotifs } =
     useNotifications(user?.uid ?? null);
@@ -47,8 +51,25 @@ export default function ProfilePage() {
 
   useEffect(() => {
     setReminderHour(activeHabit?.reminderHour ?? null);
+    setReminderMinute(activeHabit?.reminderMinute ?? 0);
     setShowReminderPicker(false);
-  }, [activeHabit?.id, activeHabit?.reminderHour]);
+  }, [activeHabit?.id, activeHabit?.reminderHour, activeHabit?.reminderMinute]);
+
+  useEffect(() => {
+    const h24 = activeHabit?.reminderHour;
+    const m = activeHabit?.reminderMinute ?? 0;
+    if (typeof h24 === "number") {
+      const period: "AM" | "PM" = h24 >= 12 ? "PM" : "AM";
+      const h12 = h24 % 12 === 0 ? 12 : h24 % 12;
+      setWheelHour(h12);
+      setWheelMinute(m);
+      setWheelPeriod(period);
+    } else {
+      setWheelHour(8);
+      setWheelMinute(0);
+      setWheelPeriod("AM");
+    }
+  }, [activeHabit?.id, activeHabit?.reminderHour, activeHabit?.reminderMinute]);
 
   useEffect(() => {
     if (!editingWhy) setWhyText(activeHabit?.reason || "");
@@ -68,13 +89,30 @@ export default function ProfilePage() {
     router.push("/login");
   };
 
-  const saveReminderHour = async (hour: number) => {
+  const saveReminderTime = async () => {
     if (!user || !activeHabit) return;
-    setReminderHour(hour);
+    const h24 =
+      wheelPeriod === "AM"
+        ? wheelHour === 12
+          ? 0
+          : wheelHour
+        : wheelHour === 12
+          ? 12
+          : wheelHour + 12;
+    setReminderHour(h24);
+    setReminderMinute(wheelMinute);
     setShowReminderPicker(false);
-    await updateHabit(user.uid, activeHabit.id, { reminderHour: hour }).catch(() => {});
-    updateHabitOptimistic(activeHabit.id, { reminderHour: hour });
-    setNotifToast(`Recordatorio para ${activeHabit.name} a las ${hour}:00`);
+    await updateHabit(user.uid, activeHabit.id, {
+      reminderHour: h24,
+      reminderMinute: wheelMinute,
+    }).catch(() => {});
+    updateHabitOptimistic(activeHabit.id, {
+      reminderHour: h24,
+      reminderMinute: wheelMinute,
+    });
+    setNotifToast(
+      `Recordatorio para ${activeHabit.name} a las ${wheelHour}:${String(wheelMinute).padStart(2, "0")} ${wheelPeriod}`
+    );
   };
 
   const toggleNotifications = async () => {
@@ -251,7 +289,12 @@ export default function ProfilePage() {
                   {notifStatus === "denied" && "Bloqueado — activa en ajustes del sistema"}
                   {notifStatus === "granted" &&
                     (reminderHour !== null
-                      ? `Activos · ${reminderHour}:00 para ${activeHabit?.name ?? "este hábito"}`
+                      ? `Activos · ${(() => {
+                          const period = reminderHour >= 12 ? "PM" : "AM";
+                          const hour12 = reminderHour % 12 === 0 ? 12 : reminderHour % 12;
+                          const mm = String(reminderMinute ?? 0).padStart(2, "0");
+                          return `${hour12}:${mm} ${period}`;
+                        })()} para ${activeHabit?.name ?? "este hábito"}`
                       : "Activos · 8 AM y 9 PM")}
                   {notifStatus === "default" && "Toca para activar"}
                 </p>
@@ -287,7 +330,14 @@ export default function ProfilePage() {
                   <div>
                     <span className="font-[Manrope] text-sm font-medium text-[#e4e1e7]">Hora del recordatorio</span>
                     <p className="text-[10px] text-[#908fa3]">
-                      {reminderHour !== null ? `${reminderHour}:00 cada día` : "Por defecto: 8 AM y 9 PM"}
+                      {reminderHour !== null
+                        ? `${(() => {
+                            const period = reminderHour >= 12 ? "PM" : "AM";
+                            const hour12 = reminderHour % 12 === 0 ? 12 : reminderHour % 12;
+                            const mm = String(reminderMinute ?? 0).padStart(2, "0");
+                            return `${hour12}:${mm} ${period}`;
+                          })()} cada día`
+                        : "Por defecto: 8 AM y 9 PM"}
                     </p>
                   </div>
                 </div>
@@ -302,29 +352,77 @@ export default function ProfilePage() {
                     className="overflow-hidden px-4 pb-4"
                   >
                     <p className="text-[10px] text-[#908fa3] mb-3 font-bold uppercase tracking-widest">Elige una hora</p>
-                    <div className="grid grid-cols-4 gap-2">
-                      {[6, 7, 8, 9, 10, 12, 17, 18, 19, 20, 21, 22].map((h) => (
-                        <button
-                          key={h}
-                          onClick={() => saveReminderHour(h)}
-                          className={`py-2 rounded-xl text-sm font-bold transition-all ${
-                            reminderHour === h
-                              ? "bg-[#3832f6] text-white"
-                              : "bg-[#2a292e] text-[#908fa3] hover:text-white"
-                          }`}
-                        >
-                          {h}:00
-                        </button>
-                      ))}
+                    <div className="grid grid-cols-3 gap-2 bg-[#141418] border border-white/5 rounded-2xl p-3">
+                      <div className="space-y-2">
+                        <p className="text-[9px] text-[#908fa3] uppercase tracking-widest text-center">Hora</p>
+                        <div className="h-40 overflow-y-auto snap-y snap-mandatory rounded-xl bg-[#1d1d22]">
+                          {Array.from({ length: 12 }, (_, i) => i + 1).map((h) => (
+                            <button
+                              key={h}
+                              onClick={() => setWheelHour(h)}
+                              className={`w-full h-10 snap-center text-sm font-bold transition-colors ${
+                                wheelHour === h ? "text-white bg-[#3832f6]/20" : "text-[#7f7e93]"
+                              }`}
+                            >
+                              {h}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        <p className="text-[9px] text-[#908fa3] uppercase tracking-widest text-center">Min</p>
+                        <div className="h-40 overflow-y-auto snap-y snap-mandatory rounded-xl bg-[#1d1d22]">
+                          {Array.from({ length: 60 }, (_, i) => i).map((m) => (
+                            <button
+                              key={m}
+                              onClick={() => setWheelMinute(m)}
+                              className={`w-full h-10 snap-center text-sm font-bold transition-colors ${
+                                wheelMinute === m ? "text-white bg-[#3832f6]/20" : "text-[#7f7e93]"
+                              }`}
+                            >
+                              {String(m).padStart(2, "0")}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        <p className="text-[9px] text-[#908fa3] uppercase tracking-widest text-center">AM/PM</p>
+                        <div className="h-40 overflow-y-auto snap-y snap-mandatory rounded-xl bg-[#1d1d22]">
+                          {(["AM", "PM"] as const).map((p) => (
+                            <button
+                              key={p}
+                              onClick={() => setWheelPeriod(p)}
+                              className={`w-full h-20 snap-center text-sm font-bold transition-colors ${
+                                wheelPeriod === p ? "text-white bg-[#3832f6]/20" : "text-[#7f7e93]"
+                              }`}
+                            >
+                              {p}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
                     </div>
+                    <button
+                      onClick={saveReminderTime}
+                      className="mt-3 w-full bg-[#3832f6] text-white py-2.5 rounded-xl text-sm font-bold"
+                    >
+                      Guardar {wheelHour}:{String(wheelMinute).padStart(2, "0")} {wheelPeriod}
+                    </button>
                     {reminderHour !== null && (
                       <button
                         onClick={async () => {
                           if (!user || !activeHabit) return;
                           setReminderHour(null);
+                          setReminderMinute(0);
                           setShowReminderPicker(false);
-                          await updateHabit(user.uid, activeHabit.id, { reminderHour: null }).catch(() => {});
-                          updateHabitOptimistic(activeHabit.id, { reminderHour: null });
+                          await updateHabit(user.uid, activeHabit.id, {
+                            reminderHour: null,
+                            reminderMinute: null,
+                          }).catch(() => {});
+                          updateHabitOptimistic(activeHabit.id, {
+                            reminderHour: null,
+                            reminderMinute: null,
+                          });
                           setNotifToast(`Horario por defecto para ${activeHabit.name}`);
                         }}
                         className="mt-3 text-[10px] text-[#454557] w-full text-center"
