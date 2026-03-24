@@ -3,9 +3,8 @@ import type { NextRequest } from "next/server";
 import admin from "@/lib/firebase-admin";
 
 // Endpoint de cron para notificaciones automáticas.
-//   0 13 * * *  → 8 AM Colombia  → saludo matutino
-//   0  2 * * *  → 9 PM Colombia  → saludo nocturno
-// El endpoint detecta la hora Colombia automáticamente (UTC-5).
+// Está pensado para ejecutarse cada 15 minutos (GitHub Actions scheduler).
+// Usa hora local Colombia (UTC-5) y recordatorios por hábito.
 // Además, si el usuario lleva +48h sin abrir la app, recibe recordatorio de inactividad.
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -96,11 +95,11 @@ export async function GET(req: NextRequest) {
         const shouldRunCustomHour = customHour !== null && customHour === colombiaHour;
         if (!shouldRunDefault && !shouldRunCustomHour) continue;
 
-        // Para minutos personalizados, permitir ventana +-15 min (cron cada 30 min)
+        // Para minutos personalizados, permitir ventana +-7 min (cron cada 15 min)
         if (shouldRunCustomHour && customMinute !== null) {
           const delta = Math.abs(colombiaMinute - customMinute);
           const wrappedDelta = Math.min(delta, 60 - delta);
-          if (wrappedDelta > 15) continue;
+          if (wrappedDelta > 7) continue;
         }
 
         const reminderKey = `${dateKey}-${colombiaHour}-${habit.id}`;
