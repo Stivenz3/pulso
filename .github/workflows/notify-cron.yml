@@ -27,7 +27,7 @@ jobs:
             exit 1
           fi
 
-          URL="${APP_URL%/}/api/notify"
+          URL="${APP_URL_CLEAN%/}/api/notify?forceNow=1"
           echo "Calling $URL"
 
           # Hasta 3 intentos con backoff
