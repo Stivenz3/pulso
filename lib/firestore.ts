@@ -141,6 +141,7 @@ export async function createHabit(
     relapsesAvoided: 0,
     reminderHour: null,
     reminderMinute: null,
+    lastReminderKey: null,
   };
   console.log("[Firestore] createHabit →", { uid, id, name: data.name });
   try {

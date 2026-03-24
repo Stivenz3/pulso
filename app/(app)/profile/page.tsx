@@ -10,7 +10,7 @@ import { updateHabit, deleteHabit } from "@/lib/firestore";
 import { useNotifications } from "@/hooks/useNotifications";
 import {
   Settings, Bell, BellOff, Lock, LogOut,
-  ChevronRight, Trash2, Zap, Shield, X,
+  ChevronRight, ChevronUp, ChevronDown, Trash2, Zap, Shield, X,
 } from "lucide-react";
 import { getHabitEmoji } from "@/components/habits/CreateHabitModal";
 
@@ -114,6 +114,22 @@ export default function ProfilePage() {
       `Recordatorio para ${activeHabit.name} a las ${wheelHour}:${String(wheelMinute).padStart(2, "0")} ${wheelPeriod}`
     );
   };
+
+  const cycleHour = (dir: 1 | -1) =>
+    setWheelHour((h) => {
+      const next = h + dir;
+      if (next > 12) return 1;
+      if (next < 1) return 12;
+      return next;
+    });
+
+  const cycleMinute = (dir: 1 | -1) =>
+    setWheelMinute((m) => {
+      const next = m + dir;
+      if (next > 59) return 0;
+      if (next < 0) return 59;
+      return next;
+    });
 
   const toggleNotifications = async () => {
     if (notifStatus === "unsupported") {
@@ -352,53 +368,79 @@ export default function ProfilePage() {
                     className="overflow-hidden px-4 pb-4"
                   >
                     <p className="text-[10px] text-[#908fa3] mb-3 font-bold uppercase tracking-widest">Elige una hora</p>
-                    <div className="grid grid-cols-3 gap-2 bg-[#141418] border border-white/5 rounded-2xl p-3">
+                    <div className="grid grid-cols-3 gap-3 bg-[#141418] border border-white/5 rounded-2xl p-3">
                       <div className="space-y-2">
                         <p className="text-[9px] text-[#908fa3] uppercase tracking-widest text-center">Hora</p>
-                        <div className="h-40 overflow-y-auto snap-y snap-mandatory rounded-xl bg-[#1d1d22]">
-                          {Array.from({ length: 12 }, (_, i) => i + 1).map((h) => (
-                            <button
-                              key={h}
-                              onClick={() => setWheelHour(h)}
-                              className={`w-full h-10 snap-center text-sm font-bold transition-colors ${
-                                wheelHour === h ? "text-white bg-[#3832f6]/20" : "text-[#7f7e93]"
-                              }`}
-                            >
-                              {h}
-                            </button>
-                          ))}
+                        <div className="rounded-2xl border border-white/10 bg-[#1d1d22] p-2 text-center">
+                          <button
+                            onClick={() => cycleHour(1)}
+                            aria-label="Subir hora"
+                            title="Subir hora"
+                            className="w-full py-1 text-[#908fa3] hover:text-white"
+                          >
+                            <ChevronUp size={16} className="mx-auto" />
+                          </button>
+                          <div className="relative mx-auto my-1 h-20 w-20 rounded-full border-2 border-[#3832f6]/40 bg-[#101014] flex items-center justify-center shadow-[0_0_30px_rgba(56,50,246,0.18)]">
+                            <span className="text-2xl font-[Space_Grotesk] font-bold text-white">{wheelHour}</span>
+                          </div>
+                          <button
+                            onClick={() => cycleHour(-1)}
+                            aria-label="Bajar hora"
+                            title="Bajar hora"
+                            className="w-full py-1 text-[#908fa3] hover:text-white"
+                          >
+                            <ChevronDown size={16} className="mx-auto" />
+                          </button>
                         </div>
                       </div>
+
                       <div className="space-y-2">
                         <p className="text-[9px] text-[#908fa3] uppercase tracking-widest text-center">Min</p>
-                        <div className="h-40 overflow-y-auto snap-y snap-mandatory rounded-xl bg-[#1d1d22]">
-                          {Array.from({ length: 60 }, (_, i) => i).map((m) => (
-                            <button
-                              key={m}
-                              onClick={() => setWheelMinute(m)}
-                              className={`w-full h-10 snap-center text-sm font-bold transition-colors ${
-                                wheelMinute === m ? "text-white bg-[#3832f6]/20" : "text-[#7f7e93]"
-                              }`}
-                            >
-                              {String(m).padStart(2, "0")}
-                            </button>
-                          ))}
+                        <div className="rounded-2xl border border-white/10 bg-[#1d1d22] p-2 text-center">
+                          <button
+                            onClick={() => cycleMinute(1)}
+                            aria-label="Subir minutos"
+                            title="Subir minutos"
+                            className="w-full py-1 text-[#908fa3] hover:text-white"
+                          >
+                            <ChevronUp size={16} className="mx-auto" />
+                          </button>
+                          <div className="relative mx-auto my-1 h-20 w-20 rounded-full border-2 border-[#3832f6]/40 bg-[#101014] flex items-center justify-center shadow-[0_0_30px_rgba(56,50,246,0.18)]">
+                            <span className="text-2xl font-[Space_Grotesk] font-bold text-white">{String(wheelMinute).padStart(2, "0")}</span>
+                          </div>
+                          <button
+                            onClick={() => cycleMinute(-1)}
+                            aria-label="Bajar minutos"
+                            title="Bajar minutos"
+                            className="w-full py-1 text-[#908fa3] hover:text-white"
+                          >
+                            <ChevronDown size={16} className="mx-auto" />
+                          </button>
                         </div>
                       </div>
+
                       <div className="space-y-2">
                         <p className="text-[9px] text-[#908fa3] uppercase tracking-widest text-center">AM/PM</p>
-                        <div className="h-40 overflow-y-auto snap-y snap-mandatory rounded-xl bg-[#1d1d22]">
-                          {(["AM", "PM"] as const).map((p) => (
-                            <button
-                              key={p}
-                              onClick={() => setWheelPeriod(p)}
-                              className={`w-full h-20 snap-center text-sm font-bold transition-colors ${
-                                wheelPeriod === p ? "text-white bg-[#3832f6]/20" : "text-[#7f7e93]"
-                              }`}
-                            >
-                              {p}
-                            </button>
-                          ))}
+                        <div className="rounded-2xl border border-white/10 bg-[#1d1d22] p-2 text-center">
+                          <button
+                            onClick={() => setWheelPeriod((p) => (p === "AM" ? "PM" : "AM"))}
+                            aria-label="Cambiar periodo"
+                            title="Cambiar periodo"
+                            className="w-full py-1 text-[#908fa3] hover:text-white"
+                          >
+                            <ChevronUp size={16} className="mx-auto" />
+                          </button>
+                          <div className="relative mx-auto my-1 h-20 w-20 rounded-full border-2 border-[#3832f6]/40 bg-[#101014] flex items-center justify-center shadow-[0_0_30px_rgba(56,50,246,0.18)]">
+                            <span className="text-2xl font-[Space_Grotesk] font-bold text-white">{wheelPeriod}</span>
+                          </div>
+                          <button
+                            onClick={() => setWheelPeriod((p) => (p === "AM" ? "PM" : "AM"))}
+                            aria-label="Cambiar periodo"
+                            title="Cambiar periodo"
+                            className="w-full py-1 text-[#908fa3] hover:text-white"
+                          >
+                            <ChevronDown size={16} className="mx-auto" />
+                          </button>
                         </div>
                       </div>
                     </div>

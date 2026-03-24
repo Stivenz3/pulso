@@ -21,7 +21,15 @@ async function getActiveHabits(db: admin.firestore.Firestore, uid: string) {
     name?: string;
     currentStreak?: number;
     reminderHour?: number | null;
+    reminderMinute?: number | null;
+    lastReminderKey?: string | null;
   }>;
+}
+
+function colLocalDateKey(nowUtc: Date): string {
+  // UTC-5 fijo para Colombia
+  const shifted = new Date(nowUtc.getTime() - 5 * 60 * 60 * 1000);
+  return shifted.toISOString().slice(0, 10);
 }
 
 export async function GET(req: NextRequest) {
@@ -45,7 +53,9 @@ export async function GET(req: NextRequest) {
     // Hora local Colombia (UTC-5)
     const nowUtc = new Date();
     const colombiaHour = ((nowUtc.getUTCHours() - 5) + 24) % 24;
+    const colombiaMinute = nowUtc.getUTCMinutes();
     const isMorning = colombiaHour >= 6 && colombiaHour < 12;
+    const dateKey = colLocalDateKey(nowUtc);
 
     const twoDaysAgo = new Date(nowUtc.getTime() - 48 * 60 * 60 * 1000);
 
@@ -59,7 +69,7 @@ export async function GET(req: NextRequest) {
     }
 
     const messages: admin.messaging.Message[] = [];
-    const messageUserIds: string[] = [];
+    const messageMeta: Array<{ uid: string; habitId: string; reminderKey: string }> = [];
 
     for (const userDoc of usersSnap.docs) {
       const userData = userDoc.data();
@@ -78,7 +88,23 @@ export async function GET(req: NextRequest) {
         const habitName: string = String(habit.name ?? "tu hábito");
         const customHour: number | null =
           typeof habit.reminderHour === "number" ? habit.reminderHour : null;
-        if (customHour !== null && customHour !== colombiaHour) continue;
+        const customMinute: number | null =
+          typeof habit.reminderMinute === "number" ? habit.reminderMinute : null;
+
+        // Si no hay hora personalizada, usar horarios por defecto 8AM y 9PM
+        const shouldRunDefault = customHour === null && (colombiaHour === 8 || colombiaHour === 21);
+        const shouldRunCustomHour = customHour !== null && customHour === colombiaHour;
+        if (!shouldRunDefault && !shouldRunCustomHour) continue;
+
+        // Para minutos personalizados, permitir ventana +-15 min (cron cada 30 min)
+        if (shouldRunCustomHour && customMinute !== null) {
+          const delta = Math.abs(colombiaMinute - customMinute);
+          const wrappedDelta = Math.min(delta, 60 - delta);
+          if (wrappedDelta > 15) continue;
+        }
+
+        const reminderKey = `${dateKey}-${colombiaHour}-${habit.id}`;
+        if (habit.lastReminderKey === reminderKey) continue; // evita duplicados
 
         let title = "";
         let body = "";
@@ -116,7 +142,7 @@ export async function GET(req: NextRequest) {
             fcmOptions: { link: "/" },
           },
         });
-        messageUserIds.push(uid);
+        messageMeta.push({ uid, habitId: habit.id, reminderKey });
       }
     }
 
@@ -143,12 +169,23 @@ export async function GET(req: NextRequest) {
             code === "messaging/registration-token-not-registered" ||
             code === "messaging/invalid-registration-token"
           ) {
-            const docId = messageUserIds[i + j];
-            if (docId) {
-              await db.collection("users").doc(docId).update({
+            const meta = messageMeta[i + j];
+            if (meta) {
+              await db.collection("users").doc(meta.uid).update({
                 fcmToken: admin.firestore.FieldValue.delete(),
               });
             }
+          }
+        } else {
+          // Marcar envío exitoso para no repetir en el mismo ciclo
+          const meta = messageMeta[i + j];
+          if (meta) {
+            await db
+              .collection("users")
+              .doc(meta.uid)
+              .collection("habits")
+              .doc(meta.habitId)
+              .update({ lastReminderKey: meta.reminderKey });
           }
         }
       }

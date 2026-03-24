@@ -43,6 +43,7 @@ export interface HabitDoc {
   relapsesAvoided: number;
   reminderHour?: number | null; // hora local 0-23 para recordatorio personalizado
   reminderMinute?: number | null; // minuto local 0-59 para recordatorio personalizado
+  lastReminderKey?: string | null; // evita envíos duplicados en el mismo ciclo
   lastStreakDate?: string; // "YYYY-MM-DD" in local timezone — used to detect if today was already counted
 }
 
