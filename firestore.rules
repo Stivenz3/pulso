@@ -1,0 +1,41 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Cada usuario solo puede leer/escribir su propio documento y subcolecciones
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+
+      // habits
+      match /habits/{habitId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
+
+      // moodLogs
+      match /moodLogs/{moodId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
+
+      // triggers
+      match /triggers/{triggerId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
+
+      // relapses
+      match /relapses/{relapseId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
+
+      // aiInsights
+      match /aiInsights/{insightId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
+
+      // dailyStats
+      match /dailyStats/{date} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
+    }
+  }
+}
