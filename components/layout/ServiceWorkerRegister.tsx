@@ -6,14 +6,19 @@ export default function ServiceWorkerRegister() {
   useEffect(() => {
     if (!("serviceWorker" in navigator)) return;
 
-    // Desregistrar cualquier SW anterior que esté interceptando peticiones
-    navigator.serviceWorker.getRegistrations().then((registrations) => {
-      registrations.forEach((r) => r.unregister());
-    });
-
-    // Registrar el nuevo SW limpio solo en producción
     if (process.env.NODE_ENV === "production") {
-      navigator.serviceWorker.register("/sw.js").catch(console.error);
+      navigator.serviceWorker
+        .register("/sw.js")
+        .then((registration) => {
+          // Si ya estaba registrado en /sw.js, no hacer nada más
+          console.log("[SW] Registrado:", registration.scope);
+        })
+        .catch(console.error);
+    } else {
+      // En desarrollo: desregistrar cualquier SW antiguo para no bloquear fetches
+      navigator.serviceWorker.getRegistrations().then((registrations) => {
+        registrations.forEach((r) => r.unregister());
+      });
     }
   }, []);
 
