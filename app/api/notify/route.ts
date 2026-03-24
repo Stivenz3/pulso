@@ -48,6 +48,7 @@ export async function GET(req: NextRequest) {
 
   try {
     const db = admin.firestore();
+    const forceNow = req.nextUrl.searchParams.get("forceNow") === "1";
 
     // Hora local Colombia (UTC-5)
     const nowUtc = new Date();
@@ -69,11 +70,24 @@ export async function GET(req: NextRequest) {
 
     const messages: admin.messaging.Message[] = [];
     const messageMeta: Array<{ uid: string; habitId: string; reminderKey: string }> = [];
+    const debug = {
+      usersChecked: 0,
+      habitsChecked: 0,
+      skippedNoToken: 0,
+      skippedByHour: 0,
+      skippedByMinuteWindow: 0,
+      skippedByDuplicateKey: 0,
+      forceNow,
+    };
 
     for (const userDoc of usersSnap.docs) {
       const userData = userDoc.data();
       const token: string | undefined = userData.fcmToken;
-      if (!token) continue;
+      debug.usersChecked += 1;
+      if (!token) {
+        debug.skippedNoToken += 1;
+        continue;
+      }
 
       const name: string = userData.name || "amigo";
       const uid = userDoc.id;
@@ -83,6 +97,7 @@ export async function GET(req: NextRequest) {
       const isInactive = lastLogin && lastLogin < twoDaysAgo;
       const habits = await getActiveHabits(db, uid);
       for (const habit of habits) {
+        debug.habitsChecked += 1;
         const streak: number = Number(habit.currentStreak ?? 0);
         const habitName: string = String(habit.name ?? "tu hábito");
         const customHour: number | null =
@@ -93,17 +108,26 @@ export async function GET(req: NextRequest) {
         // Si no hay hora personalizada, usar horarios por defecto 8AM y 9PM
         const shouldRunDefault = customHour === null && (colombiaHour === 8 || colombiaHour === 21);
         const shouldRunCustomHour = customHour !== null && customHour === colombiaHour;
-        if (!shouldRunDefault && !shouldRunCustomHour) continue;
+        if (!forceNow && !shouldRunDefault && !shouldRunCustomHour) {
+          debug.skippedByHour += 1;
+          continue;
+        }
 
         // Para minutos personalizados, permitir ventana +-7 min (cron cada 15 min)
-        if (shouldRunCustomHour && customMinute !== null) {
+        if (!forceNow && shouldRunCustomHour && customMinute !== null) {
           const delta = Math.abs(colombiaMinute - customMinute);
           const wrappedDelta = Math.min(delta, 60 - delta);
-          if (wrappedDelta > 7) continue;
+          if (wrappedDelta > 7) {
+            debug.skippedByMinuteWindow += 1;
+            continue;
+          }
         }
 
         const reminderKey = `${dateKey}-${colombiaHour}-${habit.id}`;
-        if (habit.lastReminderKey === reminderKey) continue; // evita duplicados
+        if (!forceNow && habit.lastReminderKey === reminderKey) {
+          debug.skippedByDuplicateKey += 1;
+          continue; // evita duplicados
+        }
 
         let title = "";
         let body = "";
@@ -146,7 +170,13 @@ export async function GET(req: NextRequest) {
     }
 
     if (messages.length === 0) {
-      return NextResponse.json({ sent: 0, message: "Sin mensajes para enviar" });
+      return NextResponse.json({
+        sent: 0,
+        message: "Sin mensajes para enviar",
+        colombiaHour,
+        colombiaMinute,
+        debug,
+      });
     }
 
     const BATCH = 500;
@@ -191,7 +221,7 @@ export async function GET(req: NextRequest) {
     }
 
     console.log(`[Notify] Colombia=${colombiaHour}h | Enviadas: ${totalSent}, Fallidas: ${totalFailed}`);
-    return NextResponse.json({ sent: totalSent, failed: totalFailed, colombiaHour });
+    return NextResponse.json({ sent: totalSent, failed: totalFailed, colombiaHour, colombiaMinute, debug });
   } catch (err) {
     console.error("[Notify] Error:", err);
     return NextResponse.json({ error: "Error interno" }, { status: 500 });
