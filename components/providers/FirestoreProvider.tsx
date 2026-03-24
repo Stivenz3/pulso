@@ -79,16 +79,20 @@ export default function FirestoreProvider({ children }: { children: React.ReactN
   // Foreground FCM message handler — muestra notificación nativa cuando la app está abierta
   useEffect(() => {
     let unsubFcm: (() => void) | undefined;
+    const seenKeys = new Set<string>();
     getFirebaseMessaging().then((messaging) => {
       if (!messaging) return;
       unsubFcm = onMessage(messaging, (payload) => {
         const title = payload.notification?.title ?? "Pulso";
         const body = payload.notification?.body ?? "Mantén tu racha.";
+        const reminderKey = payload.data?.reminderKey;
+        if (reminderKey && seenKeys.has(reminderKey)) return;
+        if (reminderKey) seenKeys.add(reminderKey);
         if (Notification.permission === "granted") {
           new Notification(title, {
             body,
             icon: "/icons/icon-192.png",
-            tag: "pulso-foreground",
+            tag: reminderKey || "pulso-foreground",
           });
         }
       });

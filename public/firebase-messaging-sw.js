@@ -19,16 +19,22 @@ const messaging = firebase.messaging();
 messaging.onBackgroundMessage((payload) => {
   const title = payload.notification?.title || "Pulso";
   const body = payload.notification?.body || "Mantén tu racha.";
+  const reminderKey = payload.data?.reminderKey || "pulso-reminder";
 
-  self.registration.showNotification(title, {
-    body,
-    icon: "/icons/icon-192.png",
-    badge: "/icons/icon-192.png",
-    tag: "pulso-reminder",
-    data: payload.data || {},
-    actions: [
-      { action: "open", title: "Ver mi racha" },
-    ],
+  self.registration.getNotifications({ tag: reminderKey }).then((existing) => {
+    if (existing.length > 0) return; // evita mostrar duplicadas del mismo ciclo
+
+    self.registration.showNotification(title, {
+      body,
+      icon: "/icons/icon-192.png",
+      badge: "/icons/icon-192.png",
+      tag: reminderKey,
+      renotify: false,
+      data: payload.data || {},
+      actions: [
+        { action: "open", title: "Ver mi racha" },
+      ],
+    });
   });
 });
 

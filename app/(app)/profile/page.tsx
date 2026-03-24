@@ -37,10 +37,10 @@ export default function ProfilePage() {
   const [wheelMinute, setWheelMinute] = useState<number>(0);
   const [wheelPeriod, setWheelPeriod] = useState<"AM" | "PM">("AM");
 
-  const { status: notifStatus, loading: notifLoading, enable: enableNotifs, disable: disableNotifs } =
+  const { status: notifStatus, loading: notifLoading, enabled: notifEnabled, enable: enableNotifs, disable: disableNotifs } =
     useNotifications(user?.uid ?? null);
 
-  const notificationsEnabled = notifStatus === "granted";
+  const notificationsEnabled = notifEnabled;
 
   useEffect(() => {
     if (notifToast) {

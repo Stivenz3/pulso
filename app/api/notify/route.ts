@@ -96,6 +96,12 @@ export async function GET(req: NextRequest) {
       const lastLogin = userData.lastLogin?.toDate?.() as Date | undefined;
       const isInactive = lastLogin && lastLogin < twoDaysAgo;
       const habits = await getActiveHabits(db, uid);
+      const candidates: Array<{
+        habitId: string;
+        habitName: string;
+        streak: number;
+        reminderKey: string;
+      }> = [];
       for (const habit of habits) {
         debug.habitsChecked += 1;
         const streak: number = Number(habit.currentStreak ?? 0);
@@ -129,43 +135,68 @@ export async function GET(req: NextRequest) {
           continue; // evita duplicados
         }
 
+        candidates.push({
+          habitId: habit.id,
+          habitName,
+          streak,
+          reminderKey,
+        });
+      }
+
+      // Evitar spam: máximo 1 notificación por usuario por ciclo
+      if (candidates.length > 0) {
+        candidates.sort((a, b) => b.streak - a.streak);
+        const selected = candidates[0];
         let title = "";
         let body = "";
-
         if (isInactive) {
           title = `${name}, ¿sigues ahí? 👀`;
-          body = streak > 0
-            ? `Llevas ${streak} días con ${habitName}. No dejes que el tiempo trabaje en contra.`
-            : `Hace tiempo que no practicas ${habitName}. Hoy puede ser el día 1.`;
+          body = selected.streak > 0
+            ? `Llevas ${selected.streak} días con ${selected.habitName}. No dejes que el tiempo trabaje en contra.`
+            : `Hace tiempo que no practicas ${selected.habitName}. Hoy puede ser el día 1.`;
         } else if (isMorning) {
           title = `Buenos días, ${name} ☀️`;
-          body = streak > 0
-            ? `Día ${streak + 1} de ${habitName} comienza ahora.`
-            : `Un nuevo día para empezar con ${habitName}.`;
+          body = selected.streak > 0
+            ? `Día ${selected.streak + 1} de ${selected.habitName} comienza ahora.`
+            : `Un nuevo día para empezar con ${selected.habitName}.`;
         } else {
           title = `Buenas noches, ${name} 🌙`;
-          if (streak === 0) body = `Hoy puede ser el día 1 con ${habitName}. Tú puedes.`;
-          else if (streak === 1) body = `Día 1 de ${habitName} logrado.`;
-          else if (streak < 7) body = `${streak} días con ${habitName}. La racha es real.`;
-          else if (streak < 30) body = `${streak} días con ${habitName}. Estás construyendo algo poderoso.`;
-          else if (streak < 90) body = `${streak} días con ${habitName}. Vas muy fuerte.`;
-          else body = `${streak} días con ${habitName}. Eres un ejemplo.`;
+          if (selected.streak === 0) body = `Hoy puede ser el día 1 con ${selected.habitName}. Tú puedes.`;
+          else if (selected.streak === 1) body = `Día 1 de ${selected.habitName} logrado.`;
+          else if (selected.streak < 7) body = `${selected.streak} días con ${selected.habitName}. La racha es real.`;
+          else if (selected.streak < 30) body = `${selected.streak} días con ${selected.habitName}. Estás construyendo algo poderoso.`;
+          else if (selected.streak < 90) body = `${selected.streak} días con ${selected.habitName}. Vas muy fuerte.`;
+          else body = `${selected.streak} días con ${selected.habitName}. Eres un ejemplo.`;
         }
 
         messages.push({
           token,
+          data: {
+            reminderKey: selected.reminderKey,
+            habitId: selected.habitId,
+            source: "scheduled",
+          },
           notification: { title, body },
+          android: {
+            ttl: 15 * 60 * 1000, // 15 min: evita entregas viejas
+            priority: "high",
+          },
           webpush: {
+            headers: {
+              TTL: "900", // 15 min en segundos
+              Urgency: "high",
+            },
             notification: {
               icon: "/icons/icon-192.png",
               badge: "/icons/icon-192.png",
-              tag: `pulso-daily-${habit.id}`,
+              tag: `pulso-${selected.reminderKey}`,
               requireInteraction: false,
+              renotify: false,
             },
             fcmOptions: { link: "/" },
           },
         });
-        messageMeta.push({ uid, habitId: habit.id, reminderKey });
+        messageMeta.push({ uid, habitId: selected.habitId, reminderKey: selected.reminderKey });
       }
     }
 

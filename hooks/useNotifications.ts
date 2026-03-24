@@ -2,13 +2,14 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { requestFcmToken } from "@/lib/firebase";
-import { saveFcmToken, removeFcmToken, updateUserDoc } from "@/lib/firestore";
+import { getUserDoc, saveFcmToken, removeFcmToken, updateUserDoc } from "@/lib/firestore";
 
 export type NotificationStatus = "default" | "granted" | "denied" | "unsupported";
 
 export function useNotifications(uid: string | null) {
   const [status, setStatus] = useState<NotificationStatus>("default");
   const [loading, setLoading] = useState(false);
+  const [enabled, setEnabled] = useState(false);
 
   // Leer permiso actual del navegador al montar
   useEffect(() => {
@@ -18,6 +19,16 @@ export function useNotifications(uid: string | null) {
     }
     setStatus(Notification.permission as NotificationStatus);
   }, []);
+
+  useEffect(() => {
+    if (!uid) {
+      setEnabled(false);
+      return;
+    }
+    getUserDoc(uid)
+      .then((doc) => setEnabled(Boolean(doc?.settings?.notificationsEnabled)))
+      .catch(() => setEnabled(false));
+  }, [uid]);
 
   const enable = useCallback(async (): Promise<boolean> => {
     if (!uid) return false;
@@ -35,6 +46,7 @@ export function useNotifications(uid: string | null) {
 
       await saveFcmToken(uid, token);
       await updateUserDoc(uid, { settings: { notificationsEnabled: true, theme: "dark" } });
+      setEnabled(true);
       return true;
     } catch (err) {
       console.error("[useNotifications] Error habilitando:", err);
@@ -50,6 +62,7 @@ export function useNotifications(uid: string | null) {
     try {
       await removeFcmToken(uid);
       await updateUserDoc(uid, { settings: { notificationsEnabled: false, theme: "dark" } });
+      setEnabled(false);
     } catch (err) {
       console.error("[useNotifications] Error deshabilitando:", err);
     } finally {
@@ -57,5 +70,5 @@ export function useNotifications(uid: string | null) {
     }
   }, [uid]);
 
-  return { status, loading, enable, disable };
+  return { status, loading, enabled, enable, disable };
 }
