@@ -17,8 +17,8 @@ const messaging = firebase.messaging();
 
 // Maneja mensajes en segundo plano (app cerrada / en background)
 messaging.onBackgroundMessage((payload) => {
-  const title = payload.data?.title || payload.notification?.title || "Pulso";
-  const body = payload.data?.body || payload.notification?.body || "Mantén tu racha.";
+  const title = payload.data?.customTitle || payload.notification?.title || "Pulso";
+  const body = payload.data?.customBody || payload.notification?.body || "Mantén tu racha.";
   const reminderKey = payload.data?.reminderKey || "pulso-reminder";
 
   self.registration.getNotifications({ tag: reminderKey }).then((existing) => {

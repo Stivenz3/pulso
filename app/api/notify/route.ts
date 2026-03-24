@@ -156,8 +156,8 @@ export async function GET(req: NextRequest) {
           data: {
             reminderKey,
             habitId: habit.id,
-            title,
-            body,
+            customTitle: title,
+            customBody: body,
             source: "scheduled",
           },
           android: {
@@ -168,13 +168,6 @@ export async function GET(req: NextRequest) {
             headers: {
               TTL: "900", // 15 min en segundos
               Urgency: "high",
-            },
-            notification: {
-              icon: "/icons/icon-192.png",
-              badge: "/icons/icon-192.png",
-              tag: `pulso-${reminderKey}`,
-              requireInteraction: false,
-              renotify: false,
             },
             fcmOptions: { link: "/" },
           },
