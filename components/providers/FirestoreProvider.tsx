@@ -13,6 +13,9 @@ import {
   getUserDoc,
   checkAndIncrementDailyStreak,
 } from "@/lib/firestore";
+import { getFirebaseMessaging } from "@/lib/firebase";
+import { onMessage } from "firebase/messaging";
+import { notifyEvent } from "@/lib/notifyEvent";
 import type { Unsubscribe } from "firebase/firestore";
 
 /**
@@ -55,6 +58,43 @@ export default function FirestoreProvider({ children }: { children: React.ReactN
 
   // Keep refs to unsubscribe functions so we can clean up
   const unsubs = useRef<Unsubscribe[]>([]);
+  const prevStreaksRef = useRef<Record<string, number>>({});
+  const MILESTONE_DAYS = new Set([1, 3, 7, 14, 30, 60, 90, 180, 365]);
+
+  const checkMilestones = (
+    uid: string,
+    habits: import("@/types").HabitDoc[]
+  ) => {
+    for (const habit of habits) {
+      const prev = prevStreaksRef.current[habit.id] ?? -1;
+      const curr = habit.currentStreak;
+      if (prev === -1) { prevStreaksRef.current[habit.id] = curr; continue; }
+      if (curr > prev && MILESTONE_DAYS.has(curr)) {
+        notifyEvent(uid, "milestone", { days: curr });
+      }
+      prevStreaksRef.current[habit.id] = curr;
+    }
+  };
+
+  // Foreground FCM message handler — muestra notificación nativa cuando la app está abierta
+  useEffect(() => {
+    let unsubFcm: (() => void) | undefined;
+    getFirebaseMessaging().then((messaging) => {
+      if (!messaging) return;
+      unsubFcm = onMessage(messaging, (payload) => {
+        const title = payload.notification?.title ?? "Pulso";
+        const body = payload.notification?.body ?? "Mantén tu racha.";
+        if (Notification.permission === "granted") {
+          new Notification(title, {
+            body,
+            icon: "/icons/icon-192.png",
+            tag: "pulso-foreground",
+          });
+        }
+      });
+    });
+    return () => unsubFcm?.();
+  }, []);
 
   const teardown = () => {
     unsubs.current.forEach((u) => u());
@@ -98,7 +138,7 @@ export default function FirestoreProvider({ children }: { children: React.ReactN
       try {
         console.log("[FirestoreProvider] Opening Firestore listeners...");
         unsubs.current.push(
-          subscribeHabits(uid, (h) => { console.log("[FirestoreProvider] habits →", h.length); setHabits(h); }),
+          subscribeHabits(uid, (h) => { console.log("[FirestoreProvider] habits →", h.length); setHabits(h); checkMilestones(uid, h); }),
           subscribeMoods(uid, (m) => { console.log("[FirestoreProvider] moods →", m.length); setMoods(m); updateLastMoodTimestamp(m); }),
           subscribeTriggers(uid, (t) => { console.log("[FirestoreProvider] triggers →", t.length); setTriggers(t); }),
           subscribeInsights(uid, (i) => { console.log("[FirestoreProvider] insights →", i.length); setInsights(i); }),

@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { X, Wind, Shield, Heart } from "lucide-react";
 import { useAppStore } from "@/lib/store";
 import { recordRelapse } from "@/lib/firestore";
+import { notifyEvent } from "@/lib/notifyEvent";
 
 interface RiskModalProps {
   isOpen: boolean;
@@ -27,9 +28,10 @@ export default function RiskModal({
   const [recoveryMessage, setRecoveryMessage] = useState<string | null>(null);
 
   const handleResist = useCallback(() => {
+    if (user?.uid) notifyEvent(user.uid, "resist_win");
     onClose();
     setPhase("warning");
-  }, [onClose]);
+  }, [onClose, user]);
 
   const handleRelapse = async () => {
     if (!user || saving) return;
@@ -57,6 +59,10 @@ export default function RiskModal({
         .catch(() => {});
 
       setPhase("recovery");
+      // Notificación de recuperación — llega ~1 minuto después para no interrumpir el momento
+      if (user?.uid) {
+        setTimeout(() => notifyEvent(user!.uid, "relapse_recovery"), 60_000);
+      }
     } finally {
       setSaving(false);
     }

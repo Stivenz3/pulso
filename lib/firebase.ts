@@ -50,7 +50,18 @@ export const requestFcmToken = async (): Promise<string | null> => {
   const messaging = await getFirebaseMessaging();
   if (!messaging) return null;
   try {
-    const token = await getToken(messaging, { vapidKey });
+    // Registrar firebase-messaging-sw.js explícitamente para evitar conflicto con sw.js
+    let swRegistration: ServiceWorkerRegistration | undefined;
+    if ("serviceWorker" in navigator) {
+      swRegistration = await navigator.serviceWorker.register("/firebase-messaging-sw.js", {
+        scope: "/firebase-messaging-sw/",
+      }).catch(() => undefined);
+    }
+    const token = await getToken(messaging, {
+      vapidKey,
+      ...(swRegistration ? { serviceWorkerRegistration: swRegistration } : {}),
+    });
+    console.log("[FCM] Token obtenido:", token ? token.slice(0, 20) + "..." : "null");
     return token || null;
   } catch (err) {
     console.error("[FCM] Error obteniendo token:", err);

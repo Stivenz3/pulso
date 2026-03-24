@@ -1,5 +1,5 @@
 // Firebase Messaging Service Worker — Pulso
-// Requerido por Firebase Cloud Messaging para recibir notificaciones en segundo plano.
+// Registrado en scope /firebase-messaging-sw/ para evitar conflicto con sw.js
 
 importScripts("https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js");
 importScripts("https://www.gstatic.com/firebasejs/10.12.2/firebase-messaging-compat.js");
